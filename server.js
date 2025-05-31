@@ -58,7 +58,7 @@ io.on('connection', (socket) => {
         console.log(`🏠 Oda oluşturuldu: ${room}, Kullanıcı: ${userName}`);
     });
 
-    socket.on('join-room', (data) => {
+    socket.on('join-room', (data, callback) => {
         const { room, userName } = data;
         
         if (rooms.has(room)) {
@@ -81,7 +81,7 @@ io.on('connection', (socket) => {
             
             console.log(`👤 ${userName} odaya katıldı: ${room}`);
             
-            // WebRTC bağlantısını başlat - her iki kullanıcıya da bildir
+            // WebRTC bağlantısını başlat - her iki kullanıcıya da bildir (sadece 2 kişi olduğunda)
             if (rooms.get(room).size === 2) {
                 const users = Array.from(rooms.get(room));
                 const firstUser = users[0];
@@ -99,7 +99,9 @@ io.on('connection', (socket) => {
                     userName: io.sockets.sockets.get(firstUser)?.data.userName 
                 });
             }
+            if (callback) callback({ success: true });
         } else {
+            if (callback) callback({ error: 'Oda bulunamadı!' });
             socket.emit('error', { message: 'Oda bulunamadı!' });
         }
     });
