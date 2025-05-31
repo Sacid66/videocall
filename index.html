@@ -496,7 +496,7 @@
             <div class="video-grid">
                 <div class="video-wrapper">
                     <video class="video-element" id="localVideo" autoplay muted playsinline></video>
-                    <div class="video-label">Siz</div>
+                    <div class="video-label" id="localUserName">Siz</div>
                 </div>
                 <div class="video-wrapper">
                     <video class="video-element" id="remoteVideo" autoplay playsinline></video>
@@ -543,9 +543,8 @@
             }
             
             initializeSocket() {
-                // Socket.io bağlantısı - gerçek sunucu için değiştirin
                 try {
-                    this.socket = io(window.location.origin, {
+                    this.socket = io('https://your-render-url.onrender.com', {
                         transports: ['websocket', 'polling']
                     });
                     
@@ -558,15 +557,32 @@
                     });
                     
                     this.socket.on('room-created', (data) => {
+                        this.currentRoom = data.room;
                         this.showStatus(`Oda oluşturuldu: ${data.room}`, 'success');
+                        document.getElementById('generatedCode').textContent = this.currentRoom;
+                        document.getElementById('roomDisplay').classList.remove('hidden');
                     });
                     
                     this.socket.on('user-joined', (data) => {
                         this.showStatus(`${data.userName} odaya katıldı`, 'success');
                         document.getElementById('remoteUserName').textContent = data.userName;
                     });
+
+                    this.socket.on('existing-users', (data) => {
+                        if (data.users.length > 0) {
+                            const existingUserName = data.users[0]; // İlk kullanıcıyı al
+                            document.getElementById('remoteUserName').textContent = existingUserName;
+                        }
+                    });
+                    
+                    this.socket.on('ready-to-call', async (data) => {
+                        this.remoteUserId = data.userId;
+                        document.getElementById('remoteUserName').textContent = data.userName;
+                        await this.createOffer();
+                    });
                     
                     this.socket.on('offer', async (data) => {
+                        this.remoteUserId = data.from;
                         await this.handleOffer(data);
                     });
                     
@@ -590,7 +606,6 @@
             
             initializeOfflineMode() {
                 this.updateConnectionStatus('connecting', 'Offline mod - Demo');
-                // Offline demo için mock socket
                 this.socket = {
                     emit: (event, data) => console.log('Mock emit:', event, data),
                     on: (event, callback) => console.log('Mock on:', event)
@@ -623,9 +638,6 @@
                 
                 this.userName = nameInput;
                 this.currentRoom = this.generateRoomCode();
-                
-                document.getElementById('generatedCode').textContent = this.currentRoom;
-                document.getElementById('roomDisplay').classList.remove('hidden');
                 
                 this.socket.emit('create-room', {
                     room: this.currentRoom,
@@ -675,67 +687,42 @@
                     });
                     
                     document.getElementById('localVideo').srcObject = this.localStream;
+                    document.getElementById('localUserName').textContent = this.userName;
                     this.showVideoScreen();
                     this.showStatus('Kamera açıldı!', 'success');
-                    
-                    await this.setupPeerConnection();
                     
                 } catch (error) {
                     console.error('Medya erişim hatası:', error);
                     this.showStatus('Kamera veya mikrofon erişimi reddedildi!', 'error');
                 }
             }
-
-async createOffer() {
-    if (!this.peerConnection) {
-        await this.setupPeerConnection();
-    }
-    
-    try {
-        const offer = await this.peerConnection.createOffer();
-        await this.peerConnection.setLocalDescription(offer);
-        
-        this.socket.emit('offer', {
-            to: this.remoteUserId,
-            offer: offer
-        });
-        
-        console.log('📤 Offer gönderildi');
-    } catch (error) {
-        console.error('Offer oluşturma hatası:', error);
-    }
-}
             
             async setupPeerConnection() {
                 this.peerConnection = new RTCPeerConnection(this.configuration);
                 
-                // Yerel stream'i ekle
                 this.localStream.getTracks().forEach(track => {
                     this.peerConnection.addTrack(track, this.localStream);
                 });
                 
-                // Uzak stream'i al
                 this.peerConnection.ontrack = (event) => {
                     this.remoteStream = event.streams[0];
                     document.getElementById('remoteVideo').srcObject = this.remoteStream;
                     this.showStatus('Video bağlantısı kuruldu! 🎉', 'success');
                     document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
+                    this.isConnected = true;
                 };
                 
-                // ICE adayları
                 this.peerConnection.onicecandidate = (event) => {
                     if (event.candidate) {
                         this.socket.emit('ice-candidate', {
-                            room: this.currentRoom,
+                            to: this.remoteUserId,
                             candidate: event.candidate
                         });
                     }
                 };
                 
-                // Bağlantı durumu
                 this.peerConnection.onconnectionstatechange = () => {
                     console.log('Peer bağlantı durumu:', this.peerConnection.connectionState);
-                    
                     const indicator = document.getElementById('videoConnectionIndicator');
                     switch(this.peerConnection.connectionState) {
                         case 'connected':
@@ -749,76 +736,64 @@ async createOffer() {
                         case 'failed':
                             indicator.className = 'connection-indicator disconnected';
                             this.isConnected = false;
+                            this.handleUserLeft();
                             break;
                     }
                 };
+            }
+            
+            async createOffer() {
+                if (!this.peerConnection) {
+                    await this.setupPeerConnection();
+                }
                 
-                // Demo için otomatik bağlantı (gerçek uygulamada kaldırın)
-                setTimeout(() => {
-                    if (!this.isConnected) {
-                        this.simulateConnection();
-                    }
-                }, 3000);
+                try {
+                    const offer = await this.peerConnection.createOffer();
+                    await this.peerConnection.setLocalDescription(offer);
+                    
+                    this.socket.emit('offer', {
+                        to: this.remoteUserId,
+                        offer: offer
+                    });
+                    
+                    console.log('📤 Offer gönderildi');
+                } catch (error) {
+                    console.error('Offer oluşturma hatası:', error);
+                }
             }
             
             async handleOffer(data) {
-                await this.peerConnection.setRemoteDescription(data.offer);
+                if (!this.peerConnection) {
+                    await this.setupPeerConnection();
+                }
+                
+                await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
                 const answer = await this.peerConnection.createAnswer();
                 await this.peerConnection.setLocalDescription(answer);
                 
                 this.socket.emit('answer', {
-                    room: this.currentRoom,
+                    to: this.remoteUserId,
                     answer: answer
                 });
             }
             
             async handleAnswer(data) {
-                await this.peerConnection.setRemoteDescription(data.answer);
+                await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
             }
             
             async handleIceCandidate(data) {
-                await this.peerConnection.addIceCandidate(data.candidate);
+                if (!this.peerConnection) {
+                    await this.setupPeerConnection();
+                }
+                await this.peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
             }
             
             handleUserLeft() {
                 this.showStatus('Diğer kullanıcı ayrıldı', 'error');
                 document.getElementById('remoteVideo').srcObject = null;
                 document.getElementById('remoteUserName').textContent = 'Bekleniyor...';
-            }
-            
-            // Demo bağlantı simülasyonu
-            simulateConnection() {
-                this.showStatus('Demo mod: Sanal kullanıcı bağlandı', 'success');
-                document.getElementById('remoteUserName').textContent = 'Demo Kullanıcı';
-                
-                const canvas = document.createElement('canvas');
-                canvas.width = 640;
-                canvas.height = 480;
-                const ctx = canvas.getContext('2d');
-                
-                let hue = 0;
-                const animate = () => {
-                    ctx.fillStyle = `hsl(${hue}, 70%, 20%)`;
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    
-                    ctx.fillStyle = `hsl(${hue + 180}, 80%, 60%)`;
-                    ctx.font = 'bold 32px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('DEMO USER', canvas.width/2, canvas.height/2 - 20);
-                    
-                    ctx.fillStyle = 'white';
-                    ctx.font = '16px Arial';
-                    ctx.fillText('Gerçek uygulamada diğer kullanıcının videosu', canvas.width/2, canvas.height/2 + 20);
-                    ctx.fillText(`Zaman: ${new Date().toLocaleTimeString()}`, canvas.width/2, canvas.height/2 + 50);
-                    
-                    hue = (hue + 1) % 360;
-                    requestAnimationFrame(animate);
-                };
-                animate();
-                
-                const demoStream = canvas.captureStream(30);
-                document.getElementById('remoteVideo').srcObject = demoStream;
-                document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
+                document.getElementById('videoConnectionIndicator').className = 'connection-indicator disconnected';
+                this.isConnected = false;
             }
             
             showVideoScreen() {
@@ -856,7 +831,7 @@ async createOffer() {
                         const camBtn = document.getElementById('camBtn');
                         if (this.isCameraOff) {
                             camBtn.classList.add('disabled');
-                            camBtn.textContent = '📹';
+                            camBtn.textContent = '📷';
                         } else {
                             camBtn.classList.remove('disabled');
                             camBtn.textContent = '📹';
@@ -880,9 +855,9 @@ async createOffer() {
                 document.getElementById('homeScreen').classList.remove('hidden');
                 document.getElementById('roomDisplay').classList.add('hidden');
                 
-                // Form temizle
                 document.getElementById('userName').value = '';
                 document.getElementById('roomCode').value = '';
+                document.getElementById('remoteUserName').textContent = 'Bekleniyor...';
                 
                 this.showStatus('Arama sonlandırıldı', 'success');
                 this.currentRoom = '';
@@ -902,16 +877,13 @@ async createOffer() {
             }
         }
 
-        // Initialize when page loads
         window.addEventListener('load', () => {
             const videoChat = new VideoChat();
             
-            // Tarayıcı desteği kontrolü
             if (!navigator.mediaDevices || !window.RTCPeerConnection) {
                 videoChat.showStatus('Tarayıcınız görüntülü konuşmayı desteklemiyor!', 'error');
             }
 
-            // Attach event listeners to buttons
             document.getElementById('createRoomBtn').addEventListener('click', () => videoChat.createRoom());
             document.getElementById('joinRoomBtn').addEventListener('click', () => videoChat.joinRoom());
             document.getElementById('micBtn').addEventListener('click', () => videoChat.toggleMic());
