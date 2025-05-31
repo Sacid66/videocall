@@ -686,18 +686,24 @@
                 }
             }
 
-            async createOffer(targetId) {
+async createOffer() {
     if (!this.peerConnection) {
         await this.setupPeerConnection();
     }
     
-    const offer = await this.peerConnection.createOffer();
-    await this.peerConnection.setLocalDescription(offer);
-    
-    this.socket.emit('offer', {
-        to: targetId,
-        offer: offer
-    });
+    try {
+        const offer = await this.peerConnection.createOffer();
+        await this.peerConnection.setLocalDescription(offer);
+        
+        this.socket.emit('offer', {
+            to: this.remoteUserId,
+            offer: offer
+        });
+        
+        console.log('📤 Offer gönderildi');
+    } catch (error) {
+        console.error('Offer oluşturma hatası:', error);
+    }
 }
             
             async setupPeerConnection() {

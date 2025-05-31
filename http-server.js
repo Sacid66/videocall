@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const path = require('path');
 const { Server } = require('socket.io');
+const os = require('os');
 
 const app = express();
 
@@ -13,6 +14,11 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+// Health check endpoint (Render için)
+app.get('/health', (req, res) => {
+    res.status(200).send('OK');
+});
+
 // HTTP sunucusu oluştur (Render HTTPS'i otomatik sağlar)
 const server = http.createServer(app);
 
@@ -21,7 +27,9 @@ const io = new Server(server, {
     cors: {
         origin: "*",
         methods: ["GET", "POST"]
-    }
+    },
+    // Render için önemli
+    transports: ['websocket', 'polling']
 });
 
 // Odalar ve kullanıcıları takip et
@@ -69,12 +77,17 @@ io.on('connection', (socket) => {
             
             console.log(`👤 ${userName} odaya katıldı: ${room}`);
             
-            // WebRTC bağlantısını başlat
-            // İlk kullanıcı offer gönderir
+            // WebRTC bağlantısını başlat - sadece 2 kişi olduğunda
             if (rooms.get(room).size === 2) {
                 const users = Array.from(rooms.get(room));
                 const firstUser = users[0];
-                io.to(firstUser).emit('start-call', { to: socket.id });
+                const secondUser = users[1];
+                
+                // İlk kullanıcıya ikinci kullanıcının katıldığını ve offer göndermesi gerektiğini bildir
+                io.to(firstUser).emit('ready-to-call', { 
+                    userId: secondUser,
+                    userName: userName 
+                });
             }
         } else {
             socket.emit('error', { message: 'Oda bulunamadı!' });
@@ -82,47 +95,26 @@ io.on('connection', (socket) => {
     });
 
     socket.on('offer', (data) => {
-        console.log('📤 Offer gönderiliyor:', data.to || data.room);
-        if (data.to) {
-            socket.to(data.to).emit('offer', {
-                offer: data.offer,
-                from: socket.id
-            });
-        } else {
-            socket.to(data.room).emit('offer', {
-                offer: data.offer,
-                from: socket.id
-            });
-        }
+        console.log('📤 Offer gönderiliyor');
+        socket.to(data.to).emit('offer', {
+            offer: data.offer,
+            from: socket.id
+        });
     });
 
     socket.on('answer', (data) => {
-        console.log('📤 Answer gönderiliyor:', data.to || data.room);
-        if (data.to) {
-            socket.to(data.to).emit('answer', {
-                answer: data.answer,
-                from: socket.id
-            });
-        } else {
-            socket.to(data.room).emit('answer', {
-                answer: data.answer,
-                from: socket.id
-            });
-        }
+        console.log('📤 Answer gönderiliyor');
+        socket.to(data.to).emit('answer', {
+            answer: data.answer,
+            from: socket.id
+        });
     });
 
     socket.on('ice-candidate', (data) => {
-        if (data.to) {
-            socket.to(data.to).emit('ice-candidate', {
-                candidate: data.candidate,
-                from: socket.id
-            });
-        } else {
-            socket.to(data.room).emit('ice-candidate', {
-                candidate: data.candidate,
-                from: socket.id
-            });
-        }
+        socket.to(data.to).emit('ice-candidate', {
+            candidate: data.candidate,
+            from: socket.id
+        });
     });
 
     socket.on('leave-room', () => {
@@ -140,9 +132,11 @@ io.on('connection', (socket) => {
             
             if (rooms.get(room).size === 0) {
                 rooms.delete(room);
+                console.log(`🗑️ Oda silindi: ${room}`);
             } else {
                 socket.to(room).emit('user-left', { 
-                    userName: socket.data.userName 
+                    userName: socket.data.userName,
+                    userId: socket.id
                 });
             }
             
@@ -151,10 +145,13 @@ io.on('connection', (socket) => {
     }
 });
 
+// Port - Render PORT env variable kullanır
 const PORT = process.env.PORT || 3000;
 
 // Sunucuyu başlat
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Sunucu çalışıyor - Port: ${PORT}`);
+    console.log(`\n✅ Sunucu başlatıldı!`);
+    console.log(`📍 Port: ${PORT}`);
     console.log(`🌐 Render'da otomatik HTTPS sağlanacak`);
+    console.log(`⏰ Başlangıç zamanı: ${new Date().toLocaleString('tr-TR')}\n`);
 });
