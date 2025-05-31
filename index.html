@@ -809,7 +809,7 @@
     };
 }
             
-    async createOffer() {
+   async createOffer() {
     if (!this.isStreamReady) {
         this.showStatus('Kamera ve mikrofon akışı bekleniyor...', 'warning');
         return;
@@ -819,7 +819,14 @@
         await this.setupPeerConnection();
     }
     
-    console.log('Creating offer, peerConnection:', this.peerConnection);
+    // Eğer peer connection uygun durumda değilse bekle
+    if (this.peerConnection.signalingState !== 'stable') {
+        console.log('Peer connection henüz hazır değil, bekleniyor...');
+        setTimeout(() => this.createOffer(), 500);
+        return;
+    }
+    
+    console.log('Creating offer, peerConnection state:', this.peerConnection.signalingState);
     try {
         const offer = await this.peerConnection.createOffer();
         await this.peerConnection.setLocalDescription(offer);
@@ -829,7 +836,7 @@
                 to: this.remoteUserId,
                 offer: offer
             });
-            console.log('📤 Offer gönderildi');
+            console.log('📤 Offer gönderildi, yeni state:', this.peerConnection.signalingState);
         }
     } catch (error) {
         console.error('Offer oluşturma hatası:', error);
@@ -838,31 +845,40 @@
 }
             
     async handleOffer(data) {
-        if (!this.isStreamReady) {
-            this.showStatus('Kamera ve mikrofon akışı bekleniyor...', 'warning');
-            return;
-        }
-
-        if (!this.peerConnection || this.peerConnection.signalingState === 'closed') {
-            await this.setupPeerConnection();
-        }
-                
-        try {
-            await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-            const answer = await this.peerConnection.createAnswer();
-            await this.peerConnection.setLocalDescription(answer);
-                    
-            if (this.remoteUserId) {
-                this.socket.emit('answer', {
-                    to: this.remoteUserId,
-                    answer: answer
-                });
-            }
-        } catch (error) {
-            console.error('Offer işleme hatası:', error);
-            this.showStatus('Offer işlenemedi', 'error');
-        }
+    if (!this.isStreamReady) {
+        this.showStatus('Kamera ve mikrofon akışı bekleniyor...', 'warning');
+        return;
     }
+
+    if (!this.peerConnection || this.peerConnection.signalingState === 'closed') {
+        await this.setupPeerConnection();
+    }
+    
+    // Eğer zaten bir offer varsa, yeni peer connection oluştur
+    if (this.peerConnection.signalingState !== 'stable') {
+        console.log('Peer connection durumu uygun değil, yeniden oluşturuluyor...');
+        this.peerConnection.close();
+        await this.setupPeerConnection();
+    }
+    
+    try {
+        console.log('Offer alındı, signaling state:', this.peerConnection.signalingState);
+        await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+        const answer = await this.peerConnection.createAnswer();
+        await this.peerConnection.setLocalDescription(answer);
+        
+        if (this.remoteUserId) {
+            this.socket.emit('answer', {
+                to: this.remoteUserId,
+                answer: answer
+            });
+            console.log('Answer gönderildi');
+        }
+    } catch (error) {
+        console.error('Offer işleme hatası:', error);
+        this.showStatus('Offer işlenemedi', 'error');
+    }
+}
             
     async handleAnswer(data) {
         if (this.peerConnection && this.peerConnection.signalingState !== 'closed') {
