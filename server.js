@@ -29,7 +29,8 @@ const io = new Server(server, {
         methods: ["GET", "POST"]
     },
     // Render için önemli
-    transports: ['websocket', 'polling']
+    transports: ['websocket', 'polling'],
+    secure: true
 });
 
 // Odalar ve kullanıcıları takip et
@@ -77,16 +78,22 @@ io.on('connection', (socket) => {
             
             console.log(`👤 ${userName} odaya katıldı: ${room}`);
             
-            // WebRTC bağlantısını başlat - sadece 2 kişi olduğunda
+            // WebRTC bağlantısını başlat - her iki kullanıcıya da bildir
             if (rooms.get(room).size === 2) {
                 const users = Array.from(rooms.get(room));
                 const firstUser = users[0];
                 const secondUser = users[1];
                 
-                // İlk kullanıcıya ikinci kullanıcının katıldığını ve offer göndermesi gerektiğini bildir
+                // İlk kullanıcıya ikinci kullanıcının katıldığını bildir
                 io.to(firstUser).emit('ready-to-call', { 
                     userId: secondUser,
-                    userName: userName 
+                    userName: io.sockets.sockets.get(secondUser)?.data.userName 
+                });
+                
+                // İkinci kullanıcıya ilk kullanıcının katıldığını bildir
+                io.to(secondUser).emit('ready-to-call', { 
+                    userId: firstUser,
+                    userName: io.sockets.sockets.get(firstUser)?.data.userName 
                 });
             }
         } else {
@@ -111,21 +118,23 @@ io.on('connection', (socket) => {
     });
 
     socket.on('ice-candidate', (data) => {
+        console.log('🧊 ICE candidate gönderiliyor');
         socket.to(data.to).emit('ice-candidate', {
             candidate: data.candidate,
-            from: socket.id
+            from: socket.id,
+            room: socket.data.room // Oda bilgisi eklendi
         });
     });
 
     socket.on('leave-room', () => {
-        handleDisconnect();
+        handleDisconnect(socket);
     });
 
     socket.on('disconnect', () => {
-        handleDisconnect();
+        handleDisconnect(socket);
     });
 
-    function handleDisconnect() {
+    function handleDisconnect(socket) {
         const room = socket.data.room;
         if (room && rooms.has(room)) {
             rooms.get(room).delete(socket.id);
@@ -138,6 +147,8 @@ io.on('connection', (socket) => {
                     userName: socket.data.userName,
                     userId: socket.id
                 });
+                // Diğer kullanıcıya WebRTC bağlantısını kapatmasını bildir
+                socket.to(room).emit('peer-disconnected', { userId: socket.id });
             }
             
             console.log(`👋 ${socket.data.userName} ayrıldı: ${room}`);
