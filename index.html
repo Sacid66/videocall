@@ -808,7 +808,6 @@
         }
     };
 }
-            
    async createOffer() {
     if (!this.isStreamReady) {
         this.showStatus('Kamera ve mikrofon akışı bekleniyor...', 'warning');
@@ -844,7 +843,7 @@
     }
 }
             
-   async handleOffer(data) {
+    async handleOffer(data) {
     if (!this.isStreamReady) {
         this.showStatus('Kamera ve mikrofon akışı bekleniyor...', 'warning');
         return;
@@ -877,6 +876,21 @@
     } catch (error) {
         console.error('Offer işleme hatası:', error);
         this.showStatus('Offer işlenemedi', 'error');
+    }
+}
+            
+   async handleAnswer(data) {
+    if (this.peerConnection && this.peerConnection.signalingState === 'have-local-offer') {
+        try {
+            console.log('Answer alındı, signaling state:', this.peerConnection.signalingState);
+            await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+            console.log('Answer başarıyla set edildi');
+        } catch (error) {
+            console.error('Answer işleme hatası:', error);
+            this.showStatus('Answer işlenemedi', 'error');
+        }
+    } else {
+        console.warn('Answer geldi ama peer connection uygun durumda değil:', this.peerConnection?.signalingState);
     }
 }
             
