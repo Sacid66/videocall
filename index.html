@@ -519,92 +519,103 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <script>
-        class VideoChat {
-            constructor() {
-                this.socket = null;
-                this.localStream = null;
-                this.remoteStream = null;
-                this.peerConnection = null;
-                this.currentRoom = '';
-                this.userName = '';
-                this.isMuted = false;
-                this.isCameraOff = false;
-                this.isConnected = false;
-                
-                this.configuration = {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'stun:stun2.l.google.com:19302' }
-                    ]
-                };
-                
-                this.initializeSocket();
-            }
+       class VideoChat {
+    constructor() {
+        this.socket = null;
+        this.localStream = null;
+        this.remoteStream = null;
+        this.peerConnection = null;
+        this.currentRoom = '';
+        this.userName = '';
+        this.isMuted = false;
+        this.isCameraOff = false;
+        this.isConnected = false;
+        
+        this.configuration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' }
+            ]
+        };
+        
+        this.initializeSocket();
+    }
+    
+    initializeSocket() {
+        try {
+            this.socket = io('https://videocall-7f35.onrender.com', {
+                transports: ['websocket', 'polling']
+            });
             
-            initializeSocket() {
-                try {
-                    this.socket = io('https://your-render-url.onrender.com', {
-                        transports: ['websocket', 'polling']
-                    });
-                    
-                    this.socket.on('connect', () => {
-                        this.updateConnectionStatus('connected', 'Bağlandı');
-                    });
-                    
-                    this.socket.on('disconnect', () => {
-                        this.updateConnectionStatus('disconnected', 'Bağlantı kesildi');
-                    });
-                    
-                    this.socket.on('room-created', (data) => {
-                        this.currentRoom = data.room;
-                        this.showStatus(`Oda oluşturuldu: ${data.room}`, 'success');
-                        document.getElementById('generatedCode').textContent = this.currentRoom;
-                        document.getElementById('roomDisplay').classList.remove('hidden');
-                    });
-                    
-                    this.socket.on('user-joined', (data) => {
-                        this.showStatus(`${data.userName} odaya katıldı`, 'success');
-                        document.getElementById('remoteUserName').textContent = data.userName;
-                    });
+            this.socket.on('connect', () => {
+                this.updateConnectionStatus('connected', 'Bağlandı');
+            });
+            
+            this.socket.on('disconnect', () => {
+                this.updateConnectionStatus('disconnected', 'Bağlantı kesildi');
+            });
+            
+            this.socket.on('room-created', (data) => {
+                this.currentRoom = data.room;
+                this.showStatus(`Oda oluşturuldu: ${data.room}`, 'success');
+                document.getElementById('generatedCode').textContent = this.currentRoom;
+                document.getElementById('roomDisplay').classList.remove('hidden');
+            });
+            
+            this.socket.on('user-joined', (data) => {
+                this.showStatus(`${data.userName} odaya katıldı`, 'success');
+                document.getElementById('remoteUserName').textContent = data.userName;
+            });
 
-                    this.socket.on('existing-users', (data) => {
-                        if (data.users.length > 0) {
-                            const existingUserName = data.users[0]; // İlk kullanıcıyı al
-                            document.getElementById('remoteUserName').textContent = existingUserName;
-                        }
-                    });
-                    
-                    this.socket.on('ready-to-call', async (data) => {
-                        this.remoteUserId = data.userId;
-                        document.getElementById('remoteUserName').textContent = data.userName;
-                        await this.createOffer();
-                    });
-                    
-                    this.socket.on('offer', async (data) => {
-                        this.remoteUserId = data.from;
-                        await this.handleOffer(data);
-                    });
-                    
-                    this.socket.on('answer', async (data) => {
-                        await this.handleAnswer(data);
-                    });
-                    
-                    this.socket.on('ice-candidate', async (data) => {
-                        await this.handleIceCandidate(data);
-                    });
-                    
-                    this.socket.on('user-left', () => {
-                        this.handleUserLeft();
-                    });
-                    
-                } catch (error) {
-                    console.log('Socket.io sunucusu bulunamadı, offline moda geçiliyor...');
-                    this.initializeOfflineMode();
+            this.socket.on('existing-users', (data) => {
+                if (data.users.length > 0) {
+                    const existingUserName = data.users[0];
+                    document.getElementById('remoteUserName').textContent = existingUserName;
                 }
-            }
+            });
             
-            initializeOfflineMode() {
+            this.socket.on('ready-to-call', async (data) => {
+                this.remoteUserId = data.userId;
+                document.getElementById('remoteUserName').textContent = data.userName;
+                await this.createOffer();
+            });
+            
+            this.socket.on('offer', async (data) => {
+                this.remoteUserId = data.from;
+                await this.handleOffer(data);
+            });
+            
+            this.socket.on('answer', async (data) => {
+                await this.handleAnswer(data);
+            });
+            
+            this.socket.on('ice-candidate', async (data) => {
+                await this.handleIceCandidate(data);
+            });
+            
+            this.socket.on('user-left', () => {
+                this.handleUserLeft();
+            });
+
+            this.socket.on('peer-disconnected', (data) => {
+                if (this.peerConnection) {
+                    this.peerConnection.close();
+                    this.peerConnection = null;
+                }
+                this.handleUserLeft();
+            });
+
+            this.socket.on('error', (data) => {
+                this.showStatus(`Bağlantı hatası: ${data.message}`, 'error');
+                console.error('Socket.IO hatası:', data);
+            });
+            
+        } catch (error) {
+            console.log('Socket.io sunucusu bulunamadı, offline moda geçiliyor...');
+            this.initializeOfflineMode();
+        }
+    }         initializeOfflineMode() {
                 this.updateConnectionStatus('connecting', 'Offline mod - Demo');
                 this.socket = {
                     emit: (event, data) => console.log('Mock emit:', event, data),

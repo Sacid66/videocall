@@ -28,7 +28,6 @@ const io = new Server(server, {
         origin: "*",
         methods: ["GET", "POST"]
     },
-    // Render için önemli
     transports: ['websocket', 'polling'],
     secure: true
 });
@@ -38,6 +37,10 @@ const rooms = new Map();
 
 io.on('connection', (socket) => {
     console.log('✅ Kullanıcı bağlandı:', socket.id);
+
+    socket.on('connect_error', (error) => {
+        console.error('WebSocket bağlantı hatası:', error.message);
+    });
 
     socket.on('create-room', (data) => {
         const { room, userName } = data;
@@ -122,7 +125,7 @@ io.on('connection', (socket) => {
         socket.to(data.to).emit('ice-candidate', {
             candidate: data.candidate,
             from: socket.id,
-            room: socket.data.room // Oda bilgisi eklendi
+            room: socket.data.room
         });
     });
 
@@ -147,7 +150,6 @@ io.on('connection', (socket) => {
                     userName: socket.data.userName,
                     userId: socket.id
                 });
-                // Diğer kullanıcıya WebRTC bağlantısını kapatmasını bildir
                 socket.to(room).emit('peer-disconnected', { userId: socket.id });
             }
             
