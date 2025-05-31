@@ -6,6 +6,15 @@ const os = require('os');
 
 const app = express();
 
+// CSP başlığını ekle (güvenlik için dikkatli kullan)
+app.use((req, res, next) => {
+    res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'self'; script-src 'self' 'unsafe-eval' https://cdnjs.cloudflare.com; connect-src 'self' https://videocall-7f35.onrender.com wss://videocall-7f35.onrender.com;"
+    );
+    next();
+});
+
 // Statik dosyaları servis et
 app.use(express.static(__dirname));
 
