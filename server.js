@@ -82,23 +82,26 @@ io.on('connection', (socket) => {
             console.log(`👤 ${userName} odaya katıldı: ${room}`);
             
             // WebRTC bağlantısını başlat - her iki kullanıcıya da bildir (sadece 2 kişi olduğunda)
-            if (rooms.get(room).size === 2) {
-                const users = Array.from(rooms.get(room));
-                const firstUser = users[0];
-                const secondUser = users[1];
-                
-                // İlk kullanıcıya ikinci kullanıcının katıldığını bildir
-                io.to(firstUser).emit('ready-to-call', { 
-                    userId: secondUser,
-                    userName: io.sockets.sockets.get(secondUser)?.data.userName 
-                });
-                
-                // İkinci kullanıcıya ilk kullanıcının katıldığını bildir
-                io.to(secondUser).emit('ready-to-call', { 
-                    userId: firstUser,
-                    userName: io.sockets.sockets.get(firstUser)?.data.userName 
-                });
-            }
+            // WebRTC bağlantısını başlat - 2 saniye bekle ki stream'ler hazır olsun
+if (rooms.get(room).size === 2) {
+    setTimeout(() => {
+        const users = Array.from(rooms.get(room));
+        const firstUser = users[0];
+        const secondUser = users[1];
+        
+        // İlk kullanıcıya ikinci kullanıcının katıldığını bildir
+        io.to(firstUser).emit('ready-to-call', { 
+            userId: secondUser,
+            userName: io.sockets.sockets.get(secondUser)?.data.userName 
+        });
+        
+        // İkinci kullanıcıya ilk kullanıcının katıldığını bildir
+        io.to(secondUser).emit('ready-to-call', { 
+            userId: firstUser,
+            userName: io.sockets.sockets.get(firstUser)?.data.userName 
+        });
+    }, 2000);
+}
             if (callback) callback({ success: true });
         } else {
             if (callback) callback({ error: 'Oda bulunamadı!' });

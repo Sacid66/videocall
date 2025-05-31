@@ -547,7 +547,9 @@
     initializeSocket() {
         try {
             this.socket = io('https://videocall-7f35.onrender.com', {
-                transports: ['websocket', 'polling']
+                transports: ['websocket', 'polling'],
+                  secure: true,
+                  rejectUnauthorized: false
             });
             
             this.socket.on('connect', () => {
@@ -582,17 +584,20 @@
             });
             
             this.socket.on('ready-to-call', async (data) => {
-                this.remoteUserId = data.userId;
-                document.getElementById('remoteUserName').textContent = data.userName;
-                if (!this.isStreamReady) {
-                    this.showStatus('Kamera ve mikrofon akışı bekleniyor...', 'warning');
-                    return;
-                }
-                if (!this.peerConnection || this.peerConnection.signalingState === 'closed') {
-                    await this.setupPeerConnection();
-                }
-                await this.createOffer();
-            });
+    this.remoteUserId = data.userId;
+    document.getElementById('remoteUserName').textContent = data.userName;
+    
+    // Stream hazır olana kadar bekle
+    if (!this.isStreamReady) {
+        setTimeout(() => {
+            if (this.isStreamReady) {
+                this.handleReadyToCall(data);
+            }
+        }, 1000);
+        return;
+    }
+    await this.handleReadyToCall(data);
+});
             
             this.socket.on('offer', async (data) => {
                 this.remoteUserId = data.from;
@@ -739,35 +744,49 @@
             this.isStreamReady = false;
         }
     }
+
+    async handleReadyToCall(data) {
+    if (!this.peerConnection || this.peerConnection.signalingState === 'closed') {
+        await this.setupPeerConnection();
+    }
+    await this.createOffer();
+}
             
     async setupPeerConnection() {
-    if (!this.localStream) {
-        this.showStatus('Kamera ve mikrofon akışı bulunamadı!', 'error');
-        return;
-    }
-    console.log('Setup PeerConnection, localStream:', this.localStream);
-    this.peerConnection = new RTCPeerConnection(this.configuration);
-    
-    this.localStream.getTracks().forEach(track => {
-        this.peerConnection.addTrack(track, this.localStream);
-    });
-    
-    this.peerConnection.ontrack = (event) => {
-        this.remoteStream = event.streams[0];
-        document.getElementById('remoteVideo').srcObject = this.remoteStream;
-        this.showStatus('Video bağlantısı kuruldu! 🎉', 'success');
-        document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
-        this.isConnected = true;
-    };
-    
-    this.peerConnection.onicecandidate = (event) => {
-        if (event.candidate && this.remoteUserId) {
-            this.socket.emit('ice-candidate', {
-                to: this.remoteUserId,
-                candidate: event.candidate
-            });
-        }
-    };
+   if (!this.localStream) {
+       this.showStatus('Kamera ve mikrofon akışı bulunamadı!', 'error');
+       return;
+   }
+   console.log('Setup PeerConnection, localStream:', this.localStream);
+   this.peerConnection = new RTCPeerConnection(this.configuration);
+   
+   // Önce track'leri ekle
+   if (this.localStream) {
+       this.localStream.getTracks().forEach(track => {
+           console.log('Track ekleniyor:', track.kind);
+           this.peerConnection.addTrack(track, this.localStream);
+       });
+   } else {
+       console.error('LocalStream bulunamadı!');
+       return;
+   }
+   
+   this.peerConnection.ontrack = (event) => {
+       this.remoteStream = event.streams[0];
+       document.getElementById('remoteVideo').srcObject = this.remoteStream;
+       this.showStatus('Video bağlantısı kuruldu! 🎉', 'success');
+       document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
+       this.isConnected = true;
+   };
+   
+   this.peerConnection.onicecandidate = (event) => {
+       if (event.candidate && this.remoteUserId) {
+           this.socket.emit('ice-candidate', {
+               to: this.remoteUserId,
+               candidate: event.candidate
+           });
+       }
+   };
     
     this.peerConnection.onconnectionstatechange = () => {
         console.log('Peer bağlantı durumu:', this.peerConnection.connectionState);
