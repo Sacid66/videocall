@@ -537,7 +537,8 @@
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' }
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun.relay.metered.ca:80' }
             ]
         };
         
@@ -704,10 +705,9 @@
                 this.showStatus(`Odaya bağlanamadı: ${response.error}`, 'error');
             } else {
                 this.showStatus('Odaya katılıyorsunuz...', 'success');
+                this.startLocalStream(); // Stream başlatma buraya taşındı
             }
         });
-
-        await this.startLocalStream();
     }
             
     async startLocalStream() {
@@ -732,7 +732,6 @@
             this.showVideoScreen();
             this.showStatus('Kamera açıldı!', 'success');
             this.isStreamReady = true; // Stream hazır
-            
         } catch (error) {
             console.error('Medya erişim hatası:', error);
             this.showStatus('Kamera veya mikrofon erişimi reddedildi!', 'error');
@@ -745,13 +744,13 @@
             this.showStatus('Kamera ve mikrofon akışı bulunamadı!', 'error');
             return;
         }
-
+        console.log('Setup PeerConnection, localStream:', this.localStream);
         this.peerConnection = new RTCPeerConnection(this.configuration);
-                
+        
         this.localStream.getTracks().forEach(track => {
             this.peerConnection.addTrack(track, this.localStream);
         });
-                
+        
         this.peerConnection.ontrack = (event) => {
             this.remoteStream = event.streams[0];
             document.getElementById('remoteVideo').srcObject = this.remoteStream;
@@ -759,7 +758,7 @@
             document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
             this.isConnected = true;
         };
-                
+        
         this.peerConnection.onicecandidate = (event) => {
             if (event.candidate && this.remoteUserId) {
                 this.socket.emit('ice-candidate', {
@@ -768,7 +767,7 @@
                 });
             }
         };
-                
+        
         this.peerConnection.onconnectionstatechange = () => {
             console.log('Peer bağlantı durumu:', this.peerConnection.connectionState);
             const indicator = document.getElementById('videoConnectionIndicator');
@@ -799,11 +798,12 @@
         if (!this.peerConnection || this.peerConnection.signalingState === 'closed') {
             await this.setupPeerConnection();
         }
-                
+        
+        console.log('Creating offer, peerConnection:', this.peerConnection);
         try {
             const offer = await this.peerConnection.createOffer();
             await this.peerConnection.setLocalDescription(offer);
-                    
+            
             if (this.remoteUserId) {
                 this.socket.emit('offer', {
                     to: this.remoteUserId,
