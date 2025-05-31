@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Chat System</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #111111;
+            --bg-tertiary: #1a1a1a;
+            --accent: #00ff88;
+            --accent-hover: #00cc6a;
+            --text-primary: #ffffff;
+            --text-secondary: #b3b3b3;
+            --danger: #ff4757;
+            --warning: #ffa502;
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 20%, rgba(0, 255, 136, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(0, 255, 136, 0.05) 0%, transparent 50%),
+                linear-gradient(135deg, #0a0a0a 0%, #111111 100%);
+            z-index: -1;
+            animation: bgShift 20s ease-in-out infinite alternate;
+        }
+
+        @keyframes bgShift {
+            0% { transform: scale(1) rotate(0deg); }
+            100% { transform: scale(1.05) rotate(1deg); }
+        }
+
+        .container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .glass-panel {
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 
+                0 25px 50px rgba(0, 0, 0, 0.5),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            animation: slideUp 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+            animation: shimmer 3s infinite;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .home-panel {
+            max-width: 450px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .video-panel {
+            max-width: 1400px;
+            width: 100%;
+        }
+
+        .logo {
+            font-size: 3.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent), #00ff88, #00cc6a);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { filter: drop-shadow(0 0 10px rgba(0, 255, 136, 0.3)); }
+            to { filter: drop-shadow(0 0 20px rgba(0, 255, 136, 0.6)); }
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            margin-bottom: 40px;
+            opacity: 0;
+            animation: fadeIn 1s ease-out 0.5s forwards;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+            text-align: left;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 16px 20px;
+            background: var(--bg-secondary);
+            border: 2px solid transparent;
+            border-radius: 16px;
+            color: var(--text-primary);
+            font-size: 16px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            outline: none;
+        }
+
+        .form-input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .form-input:focus {
+            border-color: var(--accent);
+            background: var(--bg-tertiary);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 255, 136, 0.2);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+            color: var(--bg-primary);
+            border: none;
+            padding: 16px 32px;
+            border-radius: 16px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            margin: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.5s ease;
+        }
+
+        .btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 35px rgba(0, 255, 136, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(-1px);
+        }
+
+        .room-display {
+            background: var(--bg-secondary);
+            padding: 24px;
+            border-radius: 20px;
+            margin: 24px 0;
+            border: 2px dashed var(--accent);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { border-color: var(--accent); }
+            50% { border-color: var(--accent-hover); }
+        }
+
+        .room-title {
+            color: var(--accent);
+            margin-bottom: 12px;
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .room-code {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            letter-spacing: 4px;
+            font-family: 'Courier New', monospace;
+            animation: codeGlow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes codeGlow {
+            from { text-shadow: 0 0 10px var(--accent); }
+            to { text-shadow: 0 0 20px var(--accent), 0 0 30px var(--accent); }
+        }
+
+        .video-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .video-wrapper {
+            position: relative;
+            background: var(--bg-secondary);
+            border-radius: 20px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            border: 2px solid var(--glass-border);
+            transition: all 0.3s ease;
+        }
+
+        .video-wrapper:hover {
+            border-color: var(--accent);
+            transform: scale(1.02);
+        }
+
+        .video-element {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            background: var(--bg-secondary);
+        }
+
+        .video-label {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            background: rgba(0, 0, 0, 0.8);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 24px 0;
+        }
+
+        .control-btn {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            font-size: 24px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .control-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .control-btn:hover::before {
+            opacity: 1;
+        }
+
+        .mic-btn {
+            background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+            color: var(--bg-primary);
+        }
+
+        .mic-btn.muted {
+            background: linear-gradient(135deg, var(--danger), #ff3742);
+            color: white;
+        }
+
+        .cam-btn {
+            background: linear-gradient(135deg, #3742fa, #2f3542);
+            color: white;
+        }
+
+        .cam-btn.disabled {
+            background: linear-gradient(135deg, var(--danger), #ff3742);
+        }
+
+        .end-btn {
+            background: linear-gradient(135deg, var(--danger), #ff3742);
+            color: white;
+        }
+
+        .control-btn:hover {
+            transform: scale(1.1) rotate(5deg);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        .status {
+            margin: 20px 0;
+            padding: 16px 20px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 136, 0.05));
+            border: 1px solid var(--accent);
+            animation: statusSlide 0.5s ease-out;
+        }
+
+        @keyframes statusSlide {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .status.error {
+            background: linear-gradient(135deg, rgba(255, 71, 87, 0.1), rgba(255, 71, 87, 0.05));
+            border-color: var(--danger);
+        }
+
+        .connection-status {
+            text-align: center;
+            margin: 16px 0;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .connection-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: blink 1.5s infinite;
+        }
+
+        .connected { background: var(--accent); }
+        .connecting { background: var(--warning); }
+        .disconnected { background: var(--danger); }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @media (max-width: 768px) {
+            .video-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .glass-panel {
+                padding: 24px;
+                margin: 10px;
+            }
+            
+            .logo {
+                font-size: 2.5rem;
+            }
+            
+            .controls {
+                gap: 12px;
+            }
+            
+            .control-btn {
+                width: 56px;
+                height: 56px;
+                font-size: 20px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .room-code {
+                font-size: 1.8rem;
+                letter-spacing: 2px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="homeScreen" class="container">
+        <div class="glass-panel home-panel">
+            <div class="logo">NEXUS</div>
+            <div class="subtitle">Gerçek zamanlı görüntülü konuşma</div>
+            
+            <div class="form-group">
+                <label class="form-label" for="userName">Kullanıcı Adı</label>
+                <input class="form-input" type="text" id="userName" placeholder="Adınızı girin" required>
+            </div>
+
+            <button class="btn" id="createRoomBtn">🚀 Yeni Oda Oluştur</button>
+            
+            <div class="form-group" style="margin-top: 32px;">
+                <label class="form-label" for="roomCode">Oda Kodu</label>
+                <input class="form-input" type="text" id="roomCode" placeholder="6 haneli kodu girin">
+            </div>
+            
+            <button class="btn" id="joinRoomBtn">🔗 Odaya Katıl</button>
+            
+            <div id="roomDisplay" class="room-display hidden">
+                <div class="room-title">🏠 Oda Kodu</div>
+                <div class="room-code" id="generatedCode"></div>
+                <div style="margin-top: 12px; font-size: 14px; color: var(--text-secondary);">
+                    Bu kodu paylaşarak diğer kişileri davet edin
+                </div>
+            </div>
+            
+            <div id="status" class="status hidden"></div>
+            
+            <div class="connection-status">
+                <span class="connection-indicator disconnected" id="connectionIndicator"></span>
+                <span id="connectionText">Bağlantı bekleniyor...</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="videoScreen" class="container hidden">
+        <div class="glass-panel video-panel">
+            <div class="video-grid">
+                <div class="video-wrapper">
+                    <video class="video-element" id="localVideo" autoplay muted playsinline></video>
+                    <div class="video-label">Siz</div>
+                </div>
+                <div class="video-wrapper">
+                    <video class="video-element" id="remoteVideo" autoplay playsinline></video>
+                    <div class="video-label" id="remoteUserName">Bekleniyor...</div>
+                </div>
+            </div>
+            
+            <div class="controls">
+                <button class="control-btn mic-btn" id="micBtn" title="Mikrofon">🎤</button>
+                <button class="control-btn cam-btn" id="camBtn" title="Kamera">📹</button>
+                <button class="control-btn end-btn" id="endBtn" title="Aramayı Sonlandır">📞</button>
+            </div>
+            
+            <div class="connection-status">
+                <span class="connection-indicator connecting" id="videoConnectionIndicator"></span>
+                <span id="roomInfo">Oda: -- | Kullanıcı: --</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <script>
+        class VideoChat {
+            constructor() {
+                this.socket = null;
+                this.localStream = null;
+                this.remoteStream = null;
+                this.peerConnection = null;
+                this.currentRoom = '';
+                this.userName = '';
+                this.isMuted = false;
+                this.isCameraOff = false;
+                this.isConnected = false;
+                
+                this.configuration = {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' }
+                    ]
+                };
+                
+                this.initializeSocket();
+            }
+            
+            initializeSocket() {
+                // Socket.io bağlantısı - gerçek sunucu için değiştirin
+                try {
+                    this.socket = io(window.location.origin, {
+                        transports: ['websocket', 'polling']
+                    });
+                    
+                    this.socket.on('connect', () => {
+                        this.updateConnectionStatus('connected', 'Bağlandı');
+                    });
+                    
+                    this.socket.on('disconnect', () => {
+                        this.updateConnectionStatus('disconnected', 'Bağlantı kesildi');
+                    });
+                    
+                    this.socket.on('room-created', (data) => {
+                        this.showStatus(`Oda oluşturuldu: ${data.room}`, 'success');
+                    });
+                    
+                    this.socket.on('user-joined', (data) => {
+                        this.showStatus(`${data.userName} odaya katıldı`, 'success');
+                        document.getElementById('remoteUserName').textContent = data.userName;
+                    });
+                    
+                    this.socket.on('offer', async (data) => {
+                        await this.handleOffer(data);
+                    });
+                    
+                    this.socket.on('answer', async (data) => {
+                        await this.handleAnswer(data);
+                    });
+                    
+                    this.socket.on('ice-candidate', async (data) => {
+                        await this.handleIceCandidate(data);
+                    });
+                    
+                    this.socket.on('user-left', () => {
+                        this.handleUserLeft();
+                    });
+                    
+                } catch (error) {
+                    console.log('Socket.io sunucusu bulunamadı, offline moda geçiliyor...');
+                    this.initializeOfflineMode();
+                }
+            }
+            
+            initializeOfflineMode() {
+                this.updateConnectionStatus('connecting', 'Offline mod - Demo');
+                // Offline demo için mock socket
+                this.socket = {
+                    emit: (event, data) => console.log('Mock emit:', event, data),
+                    on: (event, callback) => console.log('Mock on:', event)
+                };
+            }
+            
+            updateConnectionStatus(status, text) {
+                const indicator = document.getElementById('connectionIndicator');
+                const textEl = document.getElementById('connectionText');
+                
+                indicator.className = `connection-indicator ${status}`;
+                textEl.textContent = text;
+            }
+            
+            generateRoomCode() {
+                const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+                let code = '';
+                for (let i = 0; i < 6; i++) {
+                    code += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                return code;
+            }
+            
+            async createRoom() {
+                const nameInput = document.getElementById('userName').value.trim();
+                if (!nameInput) {
+                    this.showStatus('Kullanıcı adını girin!', 'error');
+                    return;
+                }
+                
+                this.userName = nameInput;
+                this.currentRoom = this.generateRoomCode();
+                
+                document.getElementById('generatedCode').textContent = this.currentRoom;
+                document.getElementById('roomDisplay').classList.remove('hidden');
+                
+                this.socket.emit('create-room', {
+                    room: this.currentRoom,
+                    userName: this.userName
+                });
+                
+                this.showStatus('Oda oluşturuluyor...', 'success');
+                await this.startLocalStream();
+            }
+            
+            async joinRoom() {
+                const nameInput = document.getElementById('userName').value.trim();
+                const roomInput = document.getElementById('roomCode').value.trim().toUpperCase();
+                
+                if (!nameInput || !roomInput) {
+                    this.showStatus('Kullanıcı adı ve oda kodunu girin!', 'error');
+                    return;
+                }
+                
+                this.userName = nameInput;
+                this.currentRoom = roomInput;
+                
+                this.socket.emit('join-room', {
+                    room: this.currentRoom,
+                    userName: this.userName
+                });
+                
+                this.showStatus('Odaya katılıyorsunuz...', 'success');
+                await this.startLocalStream();
+            }
+            
+            async startLocalStream() {
+                try {
+                    this.localStream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            width: { ideal: 1280, max: 1920 },
+                            height: { ideal: 720, max: 1080 },
+                            facingMode: 'user',
+                            frameRate: { ideal: 30 }
+                        },
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true,
+                            sampleRate: 44100
+                        }
+                    });
+                    
+                    document.getElementById('localVideo').srcObject = this.localStream;
+                    this.showVideoScreen();
+                    this.showStatus('Kamera açıldı!', 'success');
+                    
+                    await this.setupPeerConnection();
+                    
+                } catch (error) {
+                    console.error('Medya erişim hatası:', error);
+                    this.showStatus('Kamera veya mikrofon erişimi reddedildi!', 'error');
+                }
+            }
+
+            async createOffer(targetId) {
+    if (!this.peerConnection) {
+        await this.setupPeerConnection();
+    }
+    
+    const offer = await this.peerConnection.createOffer();
+    await this.peerConnection.setLocalDescription(offer);
+    
+    this.socket.emit('offer', {
+        to: targetId,
+        offer: offer
+    });
+}
+            
+            async setupPeerConnection() {
+                this.peerConnection = new RTCPeerConnection(this.configuration);
+                
+                // Yerel stream'i ekle
+                this.localStream.getTracks().forEach(track => {
+                    this.peerConnection.addTrack(track, this.localStream);
+                });
+                
+                // Uzak stream'i al
+                this.peerConnection.ontrack = (event) => {
+                    this.remoteStream = event.streams[0];
+                    document.getElementById('remoteVideo').srcObject = this.remoteStream;
+                    this.showStatus('Video bağlantısı kuruldu! 🎉', 'success');
+                    document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
+                };
+                
+                // ICE adayları
+                this.peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        this.socket.emit('ice-candidate', {
+                            room: this.currentRoom,
+                            candidate: event.candidate
+                        });
+                    }
+                };
+                
+                // Bağlantı durumu
+                this.peerConnection.onconnectionstatechange = () => {
+                    console.log('Peer bağlantı durumu:', this.peerConnection.connectionState);
+                    
+                    const indicator = document.getElementById('videoConnectionIndicator');
+                    switch(this.peerConnection.connectionState) {
+                        case 'connected':
+                            indicator.className = 'connection-indicator connected';
+                            this.isConnected = true;
+                            break;
+                        case 'connecting':
+                            indicator.className = 'connection-indicator connecting';
+                            break;
+                        case 'disconnected':
+                        case 'failed':
+                            indicator.className = 'connection-indicator disconnected';
+                            this.isConnected = false;
+                            break;
+                    }
+                };
+                
+                // Demo için otomatik bağlantı (gerçek uygulamada kaldırın)
+                setTimeout(() => {
+                    if (!this.isConnected) {
+                        this.simulateConnection();
+                    }
+                }, 3000);
+            }
+            
+            async handleOffer(data) {
+                await this.peerConnection.setRemoteDescription(data.offer);
+                const answer = await this.peerConnection.createAnswer();
+                await this.peerConnection.setLocalDescription(answer);
+                
+                this.socket.emit('answer', {
+                    room: this.currentRoom,
+                    answer: answer
+                });
+            }
+            
+            async handleAnswer(data) {
+                await this.peerConnection.setRemoteDescription(data.answer);
+            }
+            
+            async handleIceCandidate(data) {
+                await this.peerConnection.addIceCandidate(data.candidate);
+            }
+            
+            handleUserLeft() {
+                this.showStatus('Diğer kullanıcı ayrıldı', 'error');
+                document.getElementById('remoteVideo').srcObject = null;
+                document.getElementById('remoteUserName').textContent = 'Bekleniyor...';
+            }
+            
+            // Demo bağlantı simülasyonu
+            simulateConnection() {
+                this.showStatus('Demo mod: Sanal kullanıcı bağlandı', 'success');
+                document.getElementById('remoteUserName').textContent = 'Demo Kullanıcı';
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = 640;
+                canvas.height = 480;
+                const ctx = canvas.getContext('2d');
+                
+                let hue = 0;
+                const animate = () => {
+                    ctx.fillStyle = `hsl(${hue}, 70%, 20%)`;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    ctx.fillStyle = `hsl(${hue + 180}, 80%, 60%)`;
+                    ctx.font = 'bold 32px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('DEMO USER', canvas.width/2, canvas.height/2 - 20);
+                    
+                    ctx.fillStyle = 'white';
+                    ctx.font = '16px Arial';
+                    ctx.fillText('Gerçek uygulamada diğer kullanıcının videosu', canvas.width/2, canvas.height/2 + 20);
+                    ctx.fillText(`Zaman: ${new Date().toLocaleTimeString()}`, canvas.width/2, canvas.height/2 + 50);
+                    
+                    hue = (hue + 1) % 360;
+                    requestAnimationFrame(animate);
+                };
+                animate();
+                
+                const demoStream = canvas.captureStream(30);
+                document.getElementById('remoteVideo').srcObject = demoStream;
+                document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
+            }
+            
+            showVideoScreen() {
+                document.getElementById('homeScreen').classList.add('hidden');
+                document.getElementById('videoScreen').classList.remove('hidden');
+                document.getElementById('roomInfo').textContent = `Oda: ${this.currentRoom} | Kullanıcı: ${this.userName}`;
+            }
+            
+            toggleMic() {
+                if (this.localStream) {
+                    const audioTrack = this.localStream.getAudioTracks()[0];
+                    if (audioTrack) {
+                        audioTrack.enabled = !audioTrack.enabled;
+                        this.isMuted = !audioTrack.enabled;
+                        
+                        const micBtn = document.getElementById('micBtn');
+                        if (this.isMuted) {
+                            micBtn.classList.add('muted');
+                            micBtn.textContent = '🔇';
+                        } else {
+                            micBtn.classList.remove('muted');
+                            micBtn.textContent = '🎤';
+                        }
+                    }
+                }
+            }
+            
+            toggleCamera() {
+                if (this.localStream) {
+                    const videoTrack = this.localStream.getVideoTracks()[0];
+                    if (videoTrack) {
+                        videoTrack.enabled = !videoTrack.enabled;
+                        this.isCameraOff = !videoTrack.enabled;
+                        
+                        const camBtn = document.getElementById('camBtn');
+                        if (this.isCameraOff) {
+                            camBtn.classList.add('disabled');
+                            camBtn.textContent = '📹';
+                        } else {
+                            camBtn.classList.remove('disabled');
+                            camBtn.textContent = '📹';
+                        }
+                    }
+                }
+            }
+            
+            endCall() {
+                if (this.localStream) {
+                    this.localStream.getTracks().forEach(track => track.stop());
+                }
+                if (this.peerConnection) {
+                    this.peerConnection.close();
+                }
+                if (this.socket) {
+                    this.socket.emit('leave-room', { room: this.currentRoom });
+                }
+                
+                document.getElementById('videoScreen').classList.add('hidden');
+                document.getElementById('homeScreen').classList.remove('hidden');
+                document.getElementById('roomDisplay').classList.add('hidden');
+                
+                // Form temizle
+                document.getElementById('userName').value = '';
+                document.getElementById('roomCode').value = '';
+                
+                this.showStatus('Arama sonlandırıldı', 'success');
+                this.currentRoom = '';
+                this.userName = '';
+                this.isConnected = false;
+            }
+            
+            showStatus(message, type = 'success') {
+                const statusEl = document.getElementById('status');
+                statusEl.textContent = message;
+                statusEl.className = `status ${type === 'error' ? 'error' : ''}`;
+                statusEl.classList.remove('hidden');
+                
+                setTimeout(() => {
+                    statusEl.classList.add('hidden');
+                }, 5000);
+            }
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', () => {
+            const videoChat = new VideoChat();
+            
+            // Tarayıcı desteği kontrolü
+            if (!navigator.mediaDevices || !window.RTCPeerConnection) {
+                videoChat.showStatus('Tarayıcınız görüntülü konuşmayı desteklemiyor!', 'error');
+            }
+
+            // Attach event listeners to buttons
+            document.getElementById('createRoomBtn').addEventListener('click', () => videoChat.createRoom());
+            document.getElementById('joinRoomBtn').addEventListener('click', () => videoChat.joinRoom());
+            document.getElementById('micBtn').addEventListener('click', () => videoChat.toggleMic());
+            document.getElementById('camBtn').addEventListener('click', () => videoChat.toggleCamera());
+            document.getElementById('endBtn').addEventListener('click', () => videoChat.endCall());
+        });
+    </script>
+</body>
+</html>
