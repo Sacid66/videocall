@@ -1440,16 +1440,17 @@ displayMessage(message) {
                 this.userName = nameInput;
                 this.currentRoom = roomInput;
 
-                this.socket.emit('join-room', {
-                    room: this.currentRoom,
-                    userName: this.userName
-                }, (response) => {
-                    if (response && response.error) {
-                        this.showStatus(`🚫 Odaya bağlanamadı: ${response.error}`, 'error');
-                    } else {
-                        this.showStatus('🚪 Odaya katılıyorsunuz...', 'success');
-                    }
-                });
+               this.socket.emit('join-room', {
+    room: this.currentRoom,
+    userName: this.userName
+}, (response) => {
+    if (response && response.error) {
+        this.showStatus(`🚫 ${response.error}`, 'error');
+        return; // Burayı ekle - devam etmesin
+    } else if (response && response.success) {
+        this.showStatus('🚪 Odaya katılıyorsunuz...', 'success');
+    }
+});
 
                 await this.startLocalStream();
             }
