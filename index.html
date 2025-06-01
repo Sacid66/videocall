@@ -1807,6 +1807,27 @@ resetUIStates() {
 }
 
 
+    // BURAYA EKLE
+    resetToHomeScreenUI() {
+        document.getElementById('videoScreen').classList.add('hidden');
+        document.getElementById('homeScreen').classList.remove('hidden');
+        document.getElementById('roomDisplay').classList.add('hidden');
+        document.getElementById('chatPanel').classList.remove('active');
+        document.querySelector('.video-panel').classList.remove('chat-active');
+        document.getElementById('chatToggleBtn').innerHTML = '<i class="fas fa-comments"></i>';
+        this.isChatOpen = false;
+        this.clearChat();
+        document.getElementById('createUserName').value = '';
+        document.getElementById('joinUserName').value = '';
+        document.getElementById('roomCode').value = '';
+        document.getElementById('remoteUserName').textContent = 'Bekleniyor...';
+        this.currentRoom = '';
+        this.userName = '';
+        this.isConnected = false;
+        this.isHost = false;
+    }
+
+
 
 // resetToHomeScreen() fonksiyonunu şu şekilde güncelle:
 resetToHomeScreen() {
