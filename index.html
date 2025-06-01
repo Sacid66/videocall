@@ -142,16 +142,17 @@ input, textarea {
     transition: transform 0.8s cubic-bezier(0.15, 0.85, 0.35, 1); /* Daha hızlı başlayıp yavaşlar */
 }
 
-        .logo {
-            font-size: 3.5rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, var(--accent), #00ff88, #00cc6a);
-            background-clip: text;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 10px;
-            animation: glow 2s ease-in-out infinite alternate;
-        }
+.logo {
+   font-size: 3.5rem;
+   font-weight: 900;
+   font-family: 'Lexend', sans-serif;
+   background: linear-gradient(135deg, var(--accent), #00ff88, #00cc6a);
+   background-clip: text;
+   -webkit-background-clip: text;
+   -webkit-text-fill-color: transparent;
+   margin-bottom: 10px;
+   animation: glow 2s ease-in-out infinite alternate;
+}
 
         @keyframes glow {
             from { filter: drop-shadow(0 0 10px rgba(0, 255, 136, 0.3)); }
