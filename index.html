@@ -314,6 +314,7 @@ input, textarea {
             height: 100%;
             object-fit: cover;
             background: var(--bg-secondary);
+            transition: all 0.3s ease; /* Bu satırı ekle */
         }
 
 .video-label {
@@ -1266,13 +1267,20 @@ this.socket.on('ready-to-call', async (data) => {
                         this.handleUserLeft();
                     });
 
-                    this.socket.on('peer-disconnected', (data) => {
-                        if (this.peerConnection) {
-                            this.peerConnection.close();
-                            this.peerConnection = null;
-                        }
-                        this.handleUserLeft();
-                    });
+                   // Mevcut user-left ve peer-disconnected event'lerini şu şekilde değiştir:
+this.socket.on('user-left', (data) => {
+    console.log('👋 Kullanıcı ayrıldı:', data.userName);
+    this.handleUserLeft();
+});
+
+this.socket.on('peer-disconnected', (data) => {
+    console.log('🔌 Peer bağlantısı kesildi:', data.userId);
+    if (this.peerConnection) {
+        this.peerConnection.close();
+        this.peerConnection = null;
+    }
+    this.handleUserLeft();
+});
 
                     this.socket.on('error', (data) => {
                         this.showStatus(`🚫 Bağlantı hatası: ${data.message}`, 'error');
@@ -1594,24 +1602,28 @@ async setupPeerConnection() {
         }
     };
 
-    this.peerConnection.onconnectionstatechange = () => {
-        console.log('Peer bağlantı durumu:', this.peerConnection.connectionState);
-        const indicator = document.getElementById('videoConnectionIndicator');
-        switch(this.peerConnection.connectionState) {
-            case 'connected':
-                indicator.className = 'connection-indicator connected';
-                this.isConnected = true;
-                break;
-            case 'connecting':
-                indicator.className = 'connection-indicator connecting';
-                break;
-            case 'disconnected':
-            case 'failed':
-                indicator.className = 'connection-indicator disconnected';
-                this.isConnected = false;
-                break;
-        }
-    };
+this.peerConnection.onconnectionstatechange = () => {
+    console.log('Peer bağlantı durumu:', this.peerConnection.connectionState);
+    const indicator = document.getElementById('videoConnectionIndicator');
+    
+    switch(this.peerConnection.connectionState) {
+        case 'connected':
+            indicator.className = 'connection-indicator connected';
+            this.isConnected = true;
+            break;
+        case 'connecting':
+            indicator.className = 'connection-indicator connecting';
+            break;
+        case 'disconnected':
+        case 'failed':
+        case 'closed':
+            indicator.className = 'connection-indicator disconnected';
+            this.isConnected = false;
+            // UI'yi temizle
+            setTimeout(() => this.handleUserLeft(), 1000);
+            break;
+    }
+};
 }
 
             async createOffer() {
@@ -1708,14 +1720,40 @@ async setupPeerConnection() {
                 }
             }
 
-            handleUserLeft() {
-                this.showStatus('😔 Diğer kullanıcı ayrıldı', 'error');
-                document.getElementById('remoteVideo').srcObject = null;
-                document.getElementById('remoteUserName').textContent = 'Bekleniyor...';
-                document.getElementById('videoConnectionIndicator').className = 'connection-indicator disconnected';
-                this.isConnected = false;
-                this.clearChat();
-            }
+handleUserLeft() {
+    console.log('🧹 UI temizleniyor...');
+    
+    // Remote video'yu temizle ve bekleniyor yaz
+    const remoteVideo = document.getElementById('remoteVideo');
+    const remoteUserName = document.getElementById('remoteUserName');
+    
+    if (remoteVideo) {
+        remoteVideo.srcObject = null;
+        // Video elementini siyah yap
+        remoteVideo.style.background = 'var(--bg-secondary)';
+    }
+    
+    if (remoteUserName) {
+        remoteUserName.textContent = 'Bekleniyor...';
+    }
+    
+    // Connection indicator'ı güncelle
+    const indicator = document.getElementById('videoConnectionIndicator');
+    if (indicator) {
+        indicator.className = 'connection-indicator disconnected';
+    }
+    
+    // Durumları sıfırla
+    this.isConnected = false;
+    this.remoteUserId = null;
+    this.remoteStream = null;
+    
+    // Chat'i temizle
+    this.clearChat();
+    
+    // Status mesajı göster
+    this.showStatus('😔 Diğer kullanıcı ayrıldı', 'error');
+}
 
             clearChat() {
                 const chatMessages = document.getElementById('chatMessages');
