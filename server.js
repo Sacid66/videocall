@@ -165,10 +165,10 @@ if (rooms.get(room).size === 2) {
         });
     });
 
-    socket.on('leave-room', () => {
-        handleDisconnect(socket);
-    });
-
+   socket.on('leave-room', () => {
+    console.log(`🚪 Kullanıcı manuel olarak odadan ayrılıyor: ${socket.data.userName}`);
+    handleDisconnect(socket);
+});
     
     socket.on('chat-message', (data) => {
     const { room, message, sender } = data;
@@ -187,19 +187,31 @@ socket.on('host-ended-call', (data) => {
     const room = data.room;
     console.log(`🚪 Host aramayı sonlandırdı: ${room}`);
     
-    // Odadaki diğer kullanıcılara bildir - SADECE BİLGİ VER, ATMA
-    socket.to(room).emit('host-ended-call');
-    
-    // Oda temizliği - SADECE HOST'U SİL
     if (rooms.has(room)) {
-        rooms.get(room).delete(socket.id); // Sadece host'u sil
+        const roomUsers = Array.from(rooms.get(room));
+        const remainingUsers = roomUsers.filter(id => id !== socket.id);
         
-        // Eğer oda boş kaldıysa tamamen sil
-        if (rooms.get(room).size === 0) {
-            rooms.delete(room);
-            console.log(`🗑️ Oda tamamen boş kaldığı için silindi: ${room}`);
+        // Host'u odadan çıkar
+        rooms.get(room).delete(socket.id);
+        socket.leave(room);
+        socket.data.room = null; // EKLE
+        
+        if (remainingUsers.length > 0) {
+            // Yeni host ata
+            const newHostId = remainingUsers[0];
+            const newHostSocket = io.sockets.sockets.get(newHostId);
+            
+            if (newHostSocket) {
+                newHostSocket.emit('you-are-new-host');
+                socket.to(room).emit('new-host-assigned', {
+                    newHostName: newHostSocket.data.userName
+                });
+                console.log(`👑 Yeni host atandı: ${newHostSocket.data.userName}`);
+            }
         } else {
-            console.log(`🏠 Oda hala aktif, katılımcı bekliyor: ${room}`);
+            // Kimse kalmadı - odayı sil
+            rooms.delete(room);
+            console.log(`🗑️ Host ayrıldıktan sonra oda silindi: ${room}`);
         }
     }
 });
@@ -209,7 +221,18 @@ socket.on('participant-left', (data) => {
     const room = data.room;
     console.log(`👋 Katılımcı ayrıldı: ${room}`);
     
-    socket.to(room).emit('participant-left');
+    if (rooms.has(room)) {
+        rooms.get(room).delete(socket.id);
+        socket.leave(room);
+        socket.data.room = null; // EKLE
+        
+        if (rooms.get(room).size > 0) {
+            socket.to(room).emit('participant-left');
+        } else {
+            rooms.delete(room);
+            console.log(`🗑️ Son katılımcı da ayrıldı, oda silindi: ${room}`);
+        }
+    }
 });
     
     
@@ -225,25 +248,33 @@ socket.on('disconnect', () => {
 function handleDisconnect(socket) {
     const room = socket.data.room;
     if (room && rooms.has(room)) {
-        rooms.get(room).delete(socket.id);
+        const roomUsers = rooms.get(room);
+        roomUsers.delete(socket.id);
         
-        // Odadaki kalan kullanıcılara bildir
-        socket.to(room).emit('user-left', { 
-            userName: socket.data.userName,
-            userId: socket.id
-        });
-        socket.to(room).emit('peer-disconnected', { userId: socket.id });
+        console.log(`👋 ${socket.data.userName} ayrıldı: ${room}, Kalan: ${roomUsers.size}`);
         
-        if (rooms.get(room).size === 0) {
+        if (roomUsers.size === 0) {
+            // Oda tamamen boş - SİL
             rooms.delete(room);
-            console.log(`🗑️ Oda silindi: ${room}`);
+            console.log(`🗑️ Oda tamamen silindi: ${room}`);
+        } else {
+            // Hala kullanıcı var - bildir
+            socket.to(room).emit('user-left', { 
+                userName: socket.data.userName,
+                userId: socket.id
+            });
+            socket.to(room).emit('peer-disconnected', { userId: socket.id });
         }
-        
-        console.log(`👋 ${socket.data.userName} ayrıldı: ${room}`);
     }
     
-    // Socket'ten ayrıl
-    socket.leave(room);
+    // Socket'i odadan çıkar
+    if (room) {
+        socket.leave(room);
+    }
+    
+    // Socket data'sını temizle
+    socket.data.room = null;
+    socket.data.userName = null;
 }
 
 
