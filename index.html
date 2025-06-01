@@ -1573,7 +1573,8 @@ displayMessage(message) {
                 }
             }
 
-            endCall() {
+
+endCall() {
     const wasHost = this.isHost;
     
     if (this.localStream) {
@@ -1593,6 +1594,9 @@ displayMessage(message) {
             this.socket.emit('participant-left', { room: this.currentRoom });
         }
     }
+
+    // UI durumlarını sıfırla
+    this.resetUIStates();
 
     document.getElementById('videoScreen').classList.add('hidden');
     document.getElementById('homeScreen').classList.remove('hidden');
@@ -1615,6 +1619,23 @@ displayMessage(message) {
 
 
 
+resetUIStates() {
+    // Mikrofon durumunu sıfırla
+    this.isMuted = false;
+    const micBtn = document.getElementById('micBtn');
+    micBtn.classList.remove('muted');
+    micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+    
+    // Kamera durumunu sıfırla
+    this.isCameraOff = false;
+    const camBtn = document.getElementById('camBtn');
+    camBtn.classList.remove('disabled');
+    camBtn.innerHTML = '<i class="fas fa-video"></i>';
+}
+
+
+
+// resetToHomeScreen() fonksiyonunu şu şekilde güncelle:
 resetToHomeScreen() {
     if (this.localStream) {
         this.localStream.getTracks().forEach(track => track.stop());
@@ -1625,6 +1646,9 @@ resetToHomeScreen() {
         this.peerConnection.close();
         this.peerConnection = null;
     }
+
+    // UI durumlarını sıfırla
+    this.resetUIStates();
 
     document.getElementById('videoScreen').classList.add('hidden');
     document.getElementById('homeScreen').classList.remove('hidden');
