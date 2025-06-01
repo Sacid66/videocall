@@ -41,15 +41,16 @@
     transform: translate(-50%, -50%); /* TAM ORTALA */
 }
 
-               body, html {
+
+        /* iOS için ek önlemler */
+       body, html {
     touch-action: manipulation; /* Zoom'u engelle */
     -webkit-text-size-adjust: 100%; /* Text zoom'u engelle */
     -webkit-user-select: none; /* Text seçimini engelle */
     user-select: none;
 }
 
-
-        input, textarea {
+input, textarea {
     font-size: 16px !important; /* iOS 16px altında zoom yapar */
     -webkit-appearance: none;
     appearance: none; /* Standard property ekle */
@@ -459,6 +460,11 @@
     
     .video-grid {
         grid-template-columns: 1fr;
+        gap: 8px !important; /* 24px yerine 8px */
+    }
+
+   .connection-status {
+        margin-bottom: 15px !important;
     }
     
     .glass-panel {
@@ -481,13 +487,14 @@
     }
     
     .chat-toggle-btn {
-        width: 70px;
-        height: 50px;
-        font-size: 14px;
-        bottom: 120px;
-        right: 20px;
-        border-radius: 15px;
-    }
+        position: absolute !important; /* fixed yerine absolute */
+        bottom: 5px !important; /* Kutu içinde aşağıda */
+        right: 9px !important; /* Kutu içinde sağda */
+        width: 60px !important; /* 80px yerine 60px */
+        height: 45px !important; /* 60px yerine 45px */
+        font-size: 12px !important; /* 16px yerine 12px */
+        z-index: 999 !important;
+}
     
     .chat-panel {
         position: fixed !important;
@@ -513,10 +520,7 @@
     }
     
     .video-panel.chat-active {
-         transform: none !important;
-    filter: blur(20px) !important; /* Video bulanık olsun */
-    transition: filter 0.8s cubic-bezier(0.15, 0.85, 0.35, 1) !important;
-        
+        transform: none !important;
     }
     
     .chat-header {
@@ -701,8 +705,6 @@
             font-size: 14px;
             outline: none;
             transition: all 0.3s ease;
-            font-size: 16px !important; /* Zoom engelleyici */
-            transform: translateZ(0); /* Hardware acceleration */
         }
 
         .chat-input:focus {
@@ -765,17 +767,23 @@
     </div>
 
     <div id="videoScreen" class="container hidden">
-    <div class="glass-panel video-panel">
-        <div class="video-grid">
-            <div class="video-wrapper">
-                <video class="video-element" id="localVideo" autoplay muted playsinline></video>
-                <div class="video-label" id="localUserName">Siz</div>
-            </div>
-            <div class="video-wrapper">
-                <video class="video-element" id="remoteVideo" autoplay playsinline></video>
-                <div class="video-label" id="remoteUserName">Bekleniyor...</div>
-            </div>
+   <div class="glass-panel video-panel">
+    <!-- EN ÜSTE TAŞI -->
+    <div class="connection-status">
+        <span class="connection-indicator connecting" id="videoConnectionIndicator"></span>
+        <span id="roomInfo">Oda: -- | Kullanıcı: --</span>
+    </div>
+    
+    <div class="video-grid">
+        <div class="video-wrapper">
+            <video class="video-element" id="localVideo" autoplay muted playsinline></video>
+            <div class="video-label" id="localUserName">Siz</div>
         </div>
+        <div class="video-wrapper">
+            <video class="video-element" id="remoteVideo" autoplay playsinline></video>
+            <div class="video-label" id="remoteUserName">Bekleniyor...</div>
+        </div>
+    </div>
         
         <div class="controls">
             <button class="control-btn mic-btn" id="micBtn" title="Mikrofon">🎤</button>
@@ -783,10 +791,7 @@
             <button class="control-btn end-btn" id="endBtn" title="Aramayı Sonlandır">📞</button>
         </div>
         
-        <div class="connection-status">
-            <span class="connection-indicator connecting" id="videoConnectionIndicator"></span>
-            <span id="roomInfo">Oda: -- | Kullanıcı: --</span>
-        </div>
+       
 
         <button class="chat-toggle-btn" id="chatToggleBtn">CHAT</button>
     </div>
