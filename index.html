@@ -316,18 +316,19 @@ input, textarea {
             background: var(--bg-secondary);
         }
 
-        .video-label {
-            position: absolute;
-            bottom: 16px;
-            left: 16px;
-            background: rgba(0, 0, 0, 0.8);
-            color: var(--text-primary);
-            padding: 8px 16px;
-            border-radius: 12px;
-            font-size: 14px;
-            font-weight: 600;
-            backdrop-filter: blur(10px);
-        }
+.video-label {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    background: rgba(0, 0, 0, 0.8);
+    color: var(--text-primary);
+    padding: 8px 16px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    backdrop-filter: blur(10px);
+    font-family: 'Lexend', sans-serif; /* Bu satırı ekle */
+}
 
         .controls {
             display: flex;
@@ -475,6 +476,25 @@ input, textarea {
         transform: translateY(-50%) !important;
         z-index: 9999 !important;
     }
+
+    .chat-input-container {
+        display: flex !important;
+        gap: 10px !important;
+        align-items: center !important;
+        padding: 0 5px !important; /* Yan boşluk ekle */
+    }
+
+    .chat-input {
+        flex: 1 !important;
+        min-width: 0 !important; /* Flex shrink için */
+    }
+
+    .chat-send-btn {
+        width: 48px !important;
+        height: 48px !important;
+        flex-shrink: 0 !important; /* Küçülmesin */
+        margin: 0 !important;
+    }
     
     .video-grid {
         grid-template-columns: 1fr;
@@ -544,10 +564,15 @@ input, textarea {
     }
     
     .chat-header {
-        position: relative !important;
-        display: flex !important;
-        justify-content: center !important;
-        align-items: center !important;
+        text-align: left !important;
+        justify-content: flex-start !important;
+        padding-left: 0 !important; /* Bu satırı ekle */
+    }
+
+
+    .chat-header h3 {
+        margin-left: 0 !important; /* Bu satırı ekle */
+        text-align: left !important; /* Bu satırı ekle */
     }
 }
 
@@ -555,6 +580,15 @@ input, textarea {
     .room-code {
         font-size: 1.8rem;
         letter-spacing: 2px;
+    }
+
+    .chat-input-container {
+        padding: 0 3px !important;
+    }
+
+    .chat-send-btn {
+        width: 44px !important;
+        height: 44px !important;
     }
     
     .chat-toggle-btn {
@@ -631,6 +665,11 @@ input, textarea {
     backdrop-filter: blur(10px);
 }
 
+#roomInfo {
+    font-family: 'Lexend', sans-serif;
+    font-weight: 600;
+}
+
 .mobile-close-btn:hover {
     background: rgba(255, 255, 255, 0.2);
     transform: translateY(-50%) scale(1.1);
@@ -660,12 +699,46 @@ input, textarea {
 }
 
 
-        .chat-messages {
-            flex: 1;
-            overflow-y: auto;
-            margin-bottom: 15px;
-            padding-right: 10px;
-        }
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 15px;
+    padding-right: 10px;
+    position: relative;
+}
+
+.chat-blur-overlay.active {
+    opacity: 1;
+}
+
+/* Mesajlara blur efekti */
+.message.blurred {
+    filter: blur(2px);
+    opacity: 0.6;
+    transition: all 0.3s ease;
+}
+
+
+/* Üst blur overlay */
+.chat-blur-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    background: linear-gradient(to bottom, 
+        rgba(26, 26, 26, 0.9) 0%, 
+        rgba(26, 26, 26, 0.7) 30%, 
+        transparent 100%);
+    pointer-events: none;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+
+
+
 
         .chat-messages::-webkit-scrollbar {
             width: 6px;
@@ -783,16 +856,18 @@ input, textarea {
             align-items: center;
         }
 
-        .chat-input {
+.chat-input {
     flex: 1;
-    padding: 16px 20px; /* 12px 16px yerine 16px 20px */
-    background: var(--bg-tertiary); /* bg-secondary yerine bg-tertiary */
+    padding: 16px 20px;
+    background: var(--bg-tertiary);
     border: 2px solid transparent;
-    border-radius: 25px; /* 20px yerine 25px - daha yuvarlak */
+    border-radius: 25px;
     color: var(--text-primary);
-    font-size: 15px; /* 14px yerine 15px */
+    font-size: 15px;
     outline: none;
     transition: all 0.3s ease;
+    font-family: 'Lexend', sans-serif; /* Bu satırı ekle */
+    font-weight: 400; /* Bu satırı ekle */
 }
 
         .chat-input:focus {
@@ -927,6 +1002,15 @@ input, textarea {
                 };
 
                 this.initializeSocket();
+
+
+                // BURAYA EKLE - Constructor'ın en sonuna
+    setTimeout(() => {
+        const chatMessages = document.getElementById('chatMessages');
+        if (chatMessages) {
+            chatMessages.addEventListener('scroll', () => this.handleChatScroll());
+        }
+    }, 1000);
             }
 
             initializeSocket() {
@@ -1101,6 +1185,48 @@ input, textarea {
                 
                 chatInput.value = '';
             }
+
+
+handleChatScroll() {
+    const chatMessages = document.getElementById('chatMessages');
+    const messages = chatMessages.querySelectorAll('.message');
+    const blurOverlay = document.querySelector('.chat-blur-overlay');
+    
+    if (!blurOverlay) {
+        // Blur overlay'i oluştur
+        const overlay = document.createElement('div');
+        overlay.className = 'chat-blur-overlay';
+        chatMessages.appendChild(overlay);
+    }
+    
+    const scrollTop = chatMessages.scrollTop;
+    const containerTop = chatMessages.getBoundingClientRect().top;
+    
+    // Scroll varsa blur overlay'i göster
+    const overlay = chatMessages.querySelector('.chat-blur-overlay');
+    if (scrollTop > 20) {
+        overlay.classList.add('active');
+    } else {
+        overlay.classList.remove('active');
+    }
+    
+    // Her mesajı kontrol et
+    messages.forEach(message => {
+        const messageRect = message.getBoundingClientRect();
+        const messageTop = messageRect.top - containerTop;
+        
+        // Üst 40px içindeki mesajları blurla
+        if (messageTop < 40 && messageTop > -messageRect.height) {
+            const blurAmount = Math.max(0, (40 - messageTop) / 40);
+            message.style.filter = `blur(${blurAmount * 3}px)`;
+            message.style.opacity = 1 - (blurAmount * 0.5);
+        } else {
+            message.style.filter = 'none';
+            message.style.opacity = 1;
+        }
+    });
+}
+
 
 displayMessage(message) {
     const chatMessages = document.getElementById('chatMessages');
