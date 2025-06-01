@@ -583,22 +583,20 @@
                 }
             });
             
-this.socket.on('ready-to-call', async (data) => {
+            this.socket.on('ready-to-call', async (data) => {
     this.remoteUserId = data.userId;
     document.getElementById('remoteUserName').textContent = data.userName;
     
-    // Sadece oda oluşturan kişi offer göndersin
-    if (data.shouldInitiate) {
-        if (!this.peerConnection) {
-            await this.setupPeerConnection();
-        }
-        await this.createOffer();
-    } else {
-        // Diğer kişi sadece peer connection kurup beklesin
-        if (!this.peerConnection) {
-            await this.setupPeerConnection();
-        }
+    // Stream hazır olana kadar bekle
+    if (!this.isStreamReady) {
+        setTimeout(() => {
+            if (this.isStreamReady) {
+                this.handleReadyToCall(data);
+            }
+        }, 1000);
+        return;
     }
+    await this.handleReadyToCall(data);
 });
             
             this.socket.on('offer', async (data) => {
@@ -754,42 +752,61 @@ this.socket.on('ready-to-call', async (data) => {
     await this.createOffer();
 }
             
-async setupPeerConnection() {
-    if (!this.localStream) {
-        this.showStatus('Kamera ve mikrofon akışı bulunamadı!', 'error');
-        return;
-    }
+    async setupPeerConnection() {
+   if (!this.localStream) {
+       this.showStatus('Kamera ve mikrofon akışı bulunamadı!', 'error');
+       return;
+   }
+   console.log('Setup PeerConnection, localStream:', this.localStream);
+   this.peerConnection = new RTCPeerConnection(this.configuration);
+   
+   // Önce track'leri ekle
+   if (this.localStream) {
+       this.localStream.getTracks().forEach(track => {
+           console.log('Track ekleniyor:', track.kind);
+           this.peerConnection.addTrack(track, this.localStream);
+       });
+   } else {
+       console.error('LocalStream bulunamadı!');
+       return;
+   }
+   
+   this.peerConnection.ontrack = (event) => {
+       this.remoteStream = event.streams[0];
+       document.getElementById('remoteVideo').srcObject = this.remoteStream;
+       this.showStatus('Video bağlantısı kuruldu! 🎉', 'success');
+       document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
+       this.isConnected = true;
+   };
+   
+   this.peerConnection.onicecandidate = (event) => {
+       if (event.candidate && this.remoteUserId) {
+           this.socket.emit('ice-candidate', {
+               to: this.remoteUserId,
+               candidate: event.candidate
+           });
+       }
+   };
     
-    console.log('Setup PeerConnection, localStream:', this.localStream);
-    this.peerConnection = new RTCPeerConnection(this.configuration);
-    
-    // Önce event handler'ları kur
-    this.peerConnection.ontrack = (event) => {
-        console.log('🎥 Remote track alındı:', event.streams[0]);
-        this.remoteStream = event.streams[0];
-        document.getElementById('remoteVideo').srcObject = this.remoteStream;
-        this.showStatus('Video bağlantısı kuruldu! 🎉', 'success');
-        document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
-        this.isConnected = true;
-    };
-    
-    this.peerConnection.onicecandidate = (event) => {
-        if (event.candidate && this.remoteUserId) {
-            console.log('📡 ICE candidate gönderiliyor');
-            this.socket.emit('ice-candidate', {
-                to: this.remoteUserId,
-                candidate: event.candidate
-            });
+    this.peerConnection.onconnectionstatechange = () => {
+        console.log('Peer bağlantı durumu:', this.peerConnection.connectionState);
+        const indicator = document.getElementById('videoConnectionIndicator');
+        switch(this.peerConnection.connectionState) {
+            case 'connected':
+                indicator.className = 'connection-indicator connected';
+                this.isConnected = true;
+                break;
+            case 'connecting':
+                indicator.className = 'connection-indicator connecting';
+                break;
+            case 'disconnected':
+            case 'failed':
+                indicator.className = 'connection-indicator disconnected';
+                this.isConnected = false;
+                this.handleUserLeft();
+                break;
         }
     };
-    
-    // Sonra track'leri ekle
-    this.localStream.getTracks().forEach(track => {
-        console.log('Track ekleniyor:', track.kind);
-        this.peerConnection.addTrack(track, this.localStream);
-    });
-    
-    console.log('PeerConnection kuruldu, state:', this.peerConnection.signalingState);
 }
    async createOffer() {
     if (!this.isStreamReady) {
@@ -866,17 +883,12 @@ async setupPeerConnection() {
     try {
         console.log('Answer geldi, peer connection state:', this.peerConnection.signalingState);
         
-        // Eğer stable durumda ise, muhtemelen race condition var
-        if (this.peerConnection.signalingState === 'stable') {
-            console.log('Stable durumda answer geldi, yeniden bağlantı kuruyorum...');
-            this.peerConnection.close();
-            await this.setupPeerConnection();
-            return;
-        }
-        
+        // Sadece have-local-offer durumunda answer kabul et
         if (this.peerConnection.signalingState === 'have-local-offer') {
             await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
             console.log('Answer işlendi başarıyla');
+        } else {
+            console.log('Answer reddedildi, yanlış durum:', this.peerConnection.signalingState);
         }
         
     } catch (error) {
