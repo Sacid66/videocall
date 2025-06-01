@@ -719,22 +719,29 @@ input, textarea {
 }
 
 
-/* Üst blur overlay */
+/* Eski blur overlay CSS'ini şunla değiştir: */
 .chat-blur-overlay {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
-    height: 40px;
-    background: linear-gradient(to bottom, 
-        rgba(26, 26, 26, 0.9) 0%, 
-        rgba(26, 26, 26, 0.7) 30%, 
-        transparent 100%);
+    height: 35px; /* Daha ince */
+    background: 
+        radial-gradient(ellipse 150% 80% at center top, 
+            rgba(26, 26, 26, 0.9) 0%, 
+            rgba(26, 26, 26, 0.7) 25%, 
+            rgba(26, 26, 26, 0.4) 50%, 
+            rgba(26, 26, 26, 0.2) 75%, 
+            transparent 100%);
     pointer-events: none;
     z-index: 10;
     opacity: 0;
     transition: opacity 0.3s ease;
+    border-radius: 0 0 60% 60% / 0 0 35px 35px; /* Çok daha oval */
 }
+
+/* handleChatScroll fonksiyonundaki mesaj blur mantığını da güncelle */
+
 
 
 
@@ -1226,25 +1233,30 @@ handleChatScroll() {
     
     // Scroll varsa blur overlay'i göster
     const overlay = chatMessages.querySelector('.chat-blur-overlay');
-    if (scrollTop > 20) {
+    if (scrollTop > 25) { // Daha geç başlasın
         overlay.classList.add('active');
     } else {
         overlay.classList.remove('active');
     }
     
-    // Her mesajı kontrol et
+    // Her mesajı kontrol et - daha ince alan
     messages.forEach(message => {
         const messageRect = message.getBoundingClientRect();
         const messageTop = messageRect.top - containerTop;
         
-        // Üst 40px içindeki mesajları blurla
-        if (messageTop < 40 && messageTop > -messageRect.height) {
-            const blurAmount = Math.max(0, (40 - messageTop) / 40);
-            message.style.filter = `blur(${blurAmount * 3}px)`;
-            message.style.opacity = 1 - (blurAmount * 0.5);
+        // Üst 35px içindeki mesajları blurla (daha ince alan)
+        if (messageTop < 35 && messageTop > -messageRect.height) {
+            const blurAmount = Math.max(0, (35 - messageTop) / 35);
+            // Daha keskin geçiş
+            const smoothBlur = Math.pow(blurAmount, 1.2); // Daha keskin
+            
+            message.style.filter = `blur(${smoothBlur * 2.5}px)`; // Daha hafif blur
+            message.style.opacity = Math.max(0.4, 1 - (smoothBlur * 0.5));
+            message.style.transform = `translateY(${smoothBlur * 1}px)`; // Daha az hareket
         } else {
             message.style.filter = 'none';
             message.style.opacity = 1;
+            message.style.transform = 'translateY(0)';
         }
     });
 }
