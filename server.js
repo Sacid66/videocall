@@ -181,6 +181,28 @@ if (rooms.get(room).size === 2) {
         timestamp: Date.now()
     });
 });
+
+
+// BU İKİ EVENT'İ BURAYA EKLE
+socket.on('host-ended-call', (data) => {
+    const room = data.room;
+    console.log(`🚪 Host aramayı sonlandırdı: ${room}`);
+    
+    socket.to(room).emit('host-ended-call');
+    
+    if (rooms.has(room)) {
+        rooms.delete(room);
+        console.log(`🗑️ Host tarafından oda silindi: ${room}`);
+    }
+});
+
+
+socket.on('participant-left', (data) => {
+    const room = data.room;
+    console.log(`👋 Katılımcı ayrıldı: ${room}`);
+    
+    socket.to(room).emit('participant-left');
+});
     
     
     
@@ -188,9 +210,9 @@ if (rooms.get(room).size === 2) {
     
     
     
-    socket.on('disconnect', () => {
-        handleDisconnect(socket);
-    });
+socket.on('disconnect', () => {
+    handleDisconnect(socket);
+});
 
 function handleDisconnect(socket) {
     const room = socket.data.room;
