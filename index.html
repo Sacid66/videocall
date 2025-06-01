@@ -587,12 +587,18 @@ this.socket.on('ready-to-call', async (data) => {
     this.remoteUserId = data.userId;
     document.getElementById('remoteUserName').textContent = data.userName;
     
-    // Önce peer connection'ı kur, sonra offer oluştur
-    if (!this.peerConnection) {
-        await this.setupPeerConnection();
-        await new Promise(resolve => setTimeout(resolve, 500)); // Kısa bekleme
+    // Sadece oda oluşturan kişi offer göndersin
+    if (data.shouldInitiate) {
+        if (!this.peerConnection) {
+            await this.setupPeerConnection();
+        }
+        await this.createOffer();
+    } else {
+        // Diğer kişi sadece peer connection kurup beklesin
+        if (!this.peerConnection) {
+            await this.setupPeerConnection();
+        }
     }
-    await this.createOffer();
 });
             
             this.socket.on('offer', async (data) => {
@@ -879,12 +885,17 @@ this.socket.on('ready-to-call', async (data) => {
     try {
         console.log('Answer geldi, peer connection state:', this.peerConnection.signalingState);
         
-        // Sadece have-local-offer durumunda answer kabul et
+        // Eğer stable durumda ise, muhtemelen race condition var
+        if (this.peerConnection.signalingState === 'stable') {
+            console.log('Stable durumda answer geldi, yeniden bağlantı kuruyorum...');
+            this.peerConnection.close();
+            await this.setupPeerConnection();
+            return;
+        }
+        
         if (this.peerConnection.signalingState === 'have-local-offer') {
             await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
             console.log('Answer işlendi başarıyla');
-        } else {
-            console.log('Answer reddedildi, yanlış durum:', this.peerConnection.signalingState);
         }
         
     } catch (error) {
