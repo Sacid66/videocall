@@ -138,6 +138,25 @@ if (rooms.get(room).size === 2) {
         handleDisconnect(socket);
     });
 
+    
+    socket.on('chat-message', (data) => {
+    const { room, message, sender } = data;
+    console.log(`💬 Mesaj gönderildi - Oda: ${room}, Gönderen: ${sender}, Mesaj: ${message}`);
+    
+    // Mesajı aynı odadaki diğer kullanıcılara gönder (gönderen hariç)
+    socket.to(room).emit('chat-message', {
+        message: message,
+        sender: sender,
+        timestamp: Date.now()
+    });
+});
+    
+    
+    
+    
+    
+    
+    
     socket.on('disconnect', () => {
         handleDisconnect(socket);
     });
