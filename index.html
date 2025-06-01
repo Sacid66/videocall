@@ -1458,23 +1458,20 @@ this.socket.emit('join-room', {
 
             async startLocalStream() {
                 try {
-                    // Mobil için daha düşük kalite
-       const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-       
-       this.localStream = await navigator.mediaDevices.getUserMedia({
-           video: {
-               width: { ideal: isMobile ? 640 : 1280, max: isMobile ? 640 : 1920 },
-               height: { ideal: isMobile ? 480 : 720, max: isMobile ? 480 : 1080 },
-               facingMode: 'user',
-               frameRate: { ideal: isMobile ? 15 : 30 }
-           },
-           audio: {
-               echoCancellation: true,
-               noiseSuppression: isMobile ? false : true,
-               autoGainControl: true,
-               sampleRate: isMobile ? 16000 : 44100
-           }
-       });
+                    this.localStream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            width: { ideal: 1280, max: 1920 },
+                            height: { ideal: 720, max: 1080 },
+                            facingMode: 'user',
+                            frameRate: { ideal: 30 }
+                        },
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true,
+                            sampleRate: 44100
+                        }
+                    });
 
                     document.getElementById('localVideo').srcObject = this.localStream;
                     document.getElementById('localUserName').textContent = this.userName;
