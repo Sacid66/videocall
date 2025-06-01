@@ -992,6 +992,7 @@ input, textarea {
                 this.isStreamReady = false;
                 this.isChatOpen = false;
                 this.chatMessages = [];
+                this.isHost = false; // BU SATIRI EKLE
 
                 this.configuration = {
                     iceServers: [
@@ -1125,6 +1126,27 @@ input, textarea {
                         this.chatMessages.push(message);
                         this.displayMessage(message);
                     });
+
+
+// BU İKİ YENİ EVENT LİSTENER'I EKLE
+this.socket.on('host-ended-call', () => {
+    this.showStatus('🚪 Host aramayı sonlandırdı', 'error');
+    this.resetToHomeScreen();
+});
+
+this.socket.on('participant-left', () => {
+    this.showStatus('😔 Katılımcı ayrıldı, yeni katılımcı bekleniyor...', 'warning');
+    document.getElementById('remoteVideo').srcObject = null;
+    document.getElementById('remoteUserName').textContent = 'Bekleniyor...';
+    document.getElementById('videoConnectionIndicator').className = 'connection-indicator disconnected';
+    this.isConnected = false;
+    this.clearChat();
+    
+    if (this.peerConnection) {
+        this.peerConnection.close();
+        this.peerConnection = null;
+    }
+});
 
                 } catch (error) {
                     console.log('Socket.io sunucusu bulunamadı, offline moda geçiliyor...');
@@ -1271,6 +1293,7 @@ displayMessage(message) {
 
                 this.userName = nameInput;
                 this.currentRoom = this.generateRoomCode();
+                this.isHost = true; // BU SATIRI EKLE
 
                 this.socket.emit('create-room', {
                     room: this.currentRoom,
@@ -1551,36 +1574,80 @@ displayMessage(message) {
             }
 
             endCall() {
-                if (this.localStream) {
-                    this.localStream.getTracks().forEach(track => track.stop());
-                    this.localStream = null;
-                    this.isStreamReady = false;
-                }
-                if (this.peerConnection) {
-                    this.peerConnection.close();
-                    this.peerConnection = null;
-                }
-                if (this.socket) {
-                    this.socket.emit('leave-room', { room: this.currentRoom });
-                }
+    const wasHost = this.isHost;
+    
+    if (this.localStream) {
+        this.localStream.getTracks().forEach(track => track.stop());
+        this.localStream = null;
+        this.isStreamReady = false;
+    }
+    if (this.peerConnection) {
+        this.peerConnection.close();
+        this.peerConnection = null;
+    }
+    
+    if (this.socket && this.currentRoom) {
+        if (wasHost) {
+            this.socket.emit('host-ended-call', { room: this.currentRoom });
+        } else {
+            this.socket.emit('participant-left', { room: this.currentRoom });
+        }
+    }
 
-                document.getElementById('videoScreen').classList.add('hidden');
-                document.getElementById('homeScreen').classList.remove('hidden');
-                document.getElementById('roomDisplay').classList.add('hidden');
-                document.getElementById('chatPanel').classList.remove('active');
-                document.querySelector('.video-panel').classList.remove('chat-active');
-                document.getElementById('chatToggleBtn').textContent = 'CHAT';
-                this.isChatOpen = false;
-                this.clearChat();
+    document.getElementById('videoScreen').classList.add('hidden');
+    document.getElementById('homeScreen').classList.remove('hidden');
+    document.getElementById('roomDisplay').classList.add('hidden');
+    document.getElementById('chatPanel').classList.remove('active');
+    document.querySelector('.video-panel').classList.remove('chat-active');
+    document.getElementById('chatToggleBtn').innerHTML = '<i class="fas fa-comments"></i>';
+    this.isChatOpen = false;
+    this.clearChat();
 
-                document.getElementById('userName').value = '';
-                document.getElementById('roomCode').value = '';
-                document.getElementById('remoteUserName').textContent = 'Bekleniyor...';
-                this.showStatus('📴 Arama sonlandırıldı', 'success');
-                this.currentRoom = '';
-                this.userName = '';
-                this.isConnected = false;
-            }
+    document.getElementById('userName').value = '';
+    document.getElementById('roomCode').value = '';
+    document.getElementById('remoteUserName').textContent = 'Bekleniyor...';
+    this.showStatus('📴 Arama sonlandırıldı', 'success');
+    this.currentRoom = '';
+    this.userName = '';
+    this.isConnected = false;
+    this.isHost = false;
+}
+
+
+
+resetToHomeScreen() {
+    if (this.localStream) {
+        this.localStream.getTracks().forEach(track => track.stop());
+        this.localStream = null;
+        this.isStreamReady = false;
+    }
+    if (this.peerConnection) {
+        this.peerConnection.close();
+        this.peerConnection = null;
+    }
+
+    document.getElementById('videoScreen').classList.add('hidden');
+    document.getElementById('homeScreen').classList.remove('hidden');
+    document.getElementById('roomDisplay').classList.add('hidden');
+    document.getElementById('chatPanel').classList.remove('active');
+    document.querySelector('.video-panel').classList.remove('chat-active');
+    document.getElementById('chatToggleBtn').innerHTML = '<i class="fas fa-comments"></i>';
+    this.isChatOpen = false;
+    this.clearChat();
+
+    document.getElementById('userName').value = '';
+    document.getElementById('roomCode').value = '';
+    document.getElementById('remoteUserName').textContent = 'Bekleniyor...';
+    document.getElementById('remoteVideo').srcObject = null;
+
+    this.currentRoom = '';
+    this.userName = '';
+    this.isConnected = false;
+    this.isHost = false;
+    this.isMuted = false;
+    this.isCameraOff = false;
+    this.remoteUserId = null;
+}
 
             showStatus(message, type = 'success') {
                 const statusEl = document.getElementById('status');
