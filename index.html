@@ -1181,6 +1181,16 @@ cleanupConnections() {
                         }
                     });
 
+this.socket.on('peer-reset', () => {
+    console.log('🔄 Peer connection sıfırlanıyor...');
+    if (this.peerConnection) {
+        this.peerConnection.close();
+        this.peerConnection = null;
+    }
+    this.remoteUserId = null;
+    this.isConnected = false;
+});
+
                     this.socket.on('room-created', (data) => {
                         this.currentRoom = data.room;
                         this.showStatus(`✅ Oda oluşturuldu: ${data.room}`, 'success');
@@ -1200,26 +1210,33 @@ cleanupConnections() {
                         }
                     });
 
-                    this.socket.on('ready-to-call', async (data) => {
-                        const shouldCreateOffer = this.socket.id < data.userId;
-                        this.remoteUserId = data.userId;
-                        document.getElementById('remoteUserName').textContent = data.userName;
+// ready-to-call event'ini şu şekilde değiştir:
+this.socket.on('ready-to-call', async (data) => {
+    console.log('Ready to call event alındı:', data);
+    
+    this.remoteUserId = data.userId;
+    document.getElementById('remoteUserName').textContent = data.userName;
 
-                        if (!this.isStreamReady) {
-                            setTimeout(() => {
-                                if (this.isStreamReady && shouldCreateOffer) {
-                                    this.handleReadyToCall(data);
-                                }
-                            }, 1000);
-                            return;
-                        }
+    if (!this.isStreamReady) {
+        setTimeout(() => {
+            if (this.isStreamReady) {
+                this.handleReadyToCall(data);
+            }
+        }, 1000);
+        return;
+    }
 
-                        if (shouldCreateOffer) {
-                            await this.handleReadyToCall(data);
-                        } else {
-                            console.log('Bu kullanıcı offer bekliyor...');
-                        }
-                    });
+    // Peer connection'ı kur
+    await this.setupPeerConnection();
+    
+    // Sunucudan gelen karara göre offer yap
+    if (data.shouldOffer) {
+        console.log('🎯 Bu kullanıcı offer yapacak');
+        setTimeout(() => this.createOffer(), 1000);
+    } else {
+        console.log('⏳ Bu kullanıcı offer bekleyecek');
+    }
+});
 
                     this.socket.on('offer', async (data) => {
                         this.remoteUserId = data.from;
@@ -1528,68 +1545,74 @@ async startLocalStream() {
     }
 }
 
-            async handleReadyToCall(data) {
-                if (!this.peerConnection || this.peerConnection.signalingState === 'closed') {
-                    await this.setupPeerConnection();
-                }
-                await this.createOffer();
-            }
+          async handleReadyToCall(data) {
+    if (!this.peerConnection || this.peerConnection.signalingState === 'closed') {
+        await this.setupPeerConnection();
+    }
+    
+    if (data.shouldOffer) {
+        await this.createOffer();
+    }
+}
 
-            async setupPeerConnection() {
-                if (!this.localStream) {
-                    this.showStatus('🚫 Kamera ve mikrofon akışı bulunamadı!', 'error');
-                    return;
-                }
-                console.log('Setup PeerConnection, localStream:', this.localStream);
-                this.peerConnection = new RTCPeerConnection(this.configuration);
+async setupPeerConnection() {
+    if (!this.localStream) {
+        this.showStatus('🚫 Kamera ve mikrofon akışı bulunamadı!', 'error');
+        return;
+    }
+    
+    // Önceki connection varsa temizle
+    if (this.peerConnection) {
+        this.peerConnection.close();
+    }
+    
+    console.log('🔗 Yeni PeerConnection kuruluyor...');
+    this.peerConnection = new RTCPeerConnection(this.configuration);
 
-                if (this.localStream) {
-                    this.localStream.getTracks().forEach(track => {
-                        console.log('Track ekleniyor:', track.kind);
-                        this.peerConnection.addTrack(track, this.localStream);
-                    });
-                } else {
-                    console.error('LocalStream bulunamadı!');
-                    return;
-                }
+    // Track'leri ekle
+    this.localStream.getTracks().forEach(track => {
+        console.log('Track ekleniyor:', track.kind);
+        this.peerConnection.addTrack(track, this.localStream);
+    });
 
-                this.peerConnection.ontrack = (event) => {
-                    this.remoteStream = event.streams[0];
-                    document.getElementById('remoteVideo').srcObject = this.remoteStream;
-                    this.showStatus('🎥 Video bağlantısı kuruldu! 🎉', 'success');
-                    document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
-                    this.isConnected = true;
-                };
+    // Event listener'ları ekle
+    this.peerConnection.ontrack = (event) => {
+        console.log('🎥 Remote stream alındı!');
+        this.remoteStream = event.streams[0];
+        document.getElementById('remoteVideo').srcObject = this.remoteStream;
+        this.showStatus('🎥 Video bağlantısı kuruldu! 🎉', 'success');
+        document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
+        this.isConnected = true;
+    };
 
-                this.peerConnection.onicecandidate = (event) => {
-                    if (event.candidate && this.remoteUserId) {
-                        this.socket.emit('ice-candidate', {
-                            to: this.remoteUserId,
-                            candidate: event.candidate
-                        });
-                    }
-                };
+    this.peerConnection.onicecandidate = (event) => {
+        if (event.candidate && this.remoteUserId) {
+            this.socket.emit('ice-candidate', {
+                to: this.remoteUserId,
+                candidate: event.candidate
+            });
+        }
+    };
 
-                this.peerConnection.onconnectionstatechange = () => {
-                    console.log('Peer bağlantı durumu:', this.peerConnection.connectionState);
-                    const indicator = document.getElementById('videoConnectionIndicator');
-                    switch(this.peerConnection.connectionState) {
-                        case 'connected':
-                            indicator.className = 'connection-indicator connected';
-                            this.isConnected = true;
-                            break;
-                        case 'connecting':
-                            indicator.className = 'connection-indicator connecting';
-                            break;
-                        case 'disconnected':
-                        case 'failed':
-                            indicator.className = 'connection-indicator disconnected';
-                            this.isConnected = false;
-                            this.handleUserLeft();
-                            break;
-                    }
-                };
-            }
+    this.peerConnection.onconnectionstatechange = () => {
+        console.log('Peer bağlantı durumu:', this.peerConnection.connectionState);
+        const indicator = document.getElementById('videoConnectionIndicator');
+        switch(this.peerConnection.connectionState) {
+            case 'connected':
+                indicator.className = 'connection-indicator connected';
+                this.isConnected = true;
+                break;
+            case 'connecting':
+                indicator.className = 'connection-indicator connecting';
+                break;
+            case 'disconnected':
+            case 'failed':
+                indicator.className = 'connection-indicator disconnected';
+                this.isConnected = false;
+                break;
+        }
+    };
+}
 
             async createOffer() {
                 if (!this.isStreamReady) {
