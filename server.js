@@ -43,71 +43,92 @@ io.on('connection', (socket) => {
     });
 
     socket.on('create-room', (data) => {
-        const { room, userName } = data;
+    const { room, userName } = data;
+    
+    // Önceki odadan çık
+    if (socket.data.room) {
+        socket.leave(socket.data.room);
+        if (rooms.has(socket.data.room)) {
+            rooms.get(socket.data.room).delete(socket.id);
+            if (rooms.get(socket.data.room).size === 0) {
+                rooms.delete(socket.data.room);
+            }
+        }
+    }
+    
+    socket.join(room);
+    socket.data.userName = userName;
+    socket.data.room = room;
+    
+    if (!rooms.has(room)) {
+        rooms.set(room, new Set());
+    }
+    rooms.get(room).add(socket.id);
+    
+    socket.emit('room-created', { room });
+    console.log(`🏠 Oda oluşturuldu: ${room}, Kullanıcı: ${userName}`);
+});
+
+   socket.on('join-room', (data, callback) => {
+    const { room, userName } = data;
+    
+    if (rooms.has(room)) {
+        // Önceki odadan çık
+        if (socket.data.room) {
+            socket.leave(socket.data.room);
+            if (rooms.has(socket.data.room)) {
+                rooms.get(socket.data.room).delete(socket.id);
+                if (rooms.get(socket.data.room).size === 0) {
+                    rooms.delete(socket.data.room);
+                }
+            }
+        }
         
         socket.join(room);
         socket.data.userName = userName;
         socket.data.room = room;
         
-        if (!rooms.has(room)) {
-            rooms.set(room, new Set());
-        }
         rooms.get(room).add(socket.id);
         
-        socket.emit('room-created', { room });
-        console.log(`🏠 Oda oluşturuldu: ${room}, Kullanıcı: ${userName}`);
-    });
-
-    socket.on('join-room', (data, callback) => {
-        const { room, userName } = data;
+        // Odadaki diğer kullanıcılara bildir
+        socket.to(room).emit('user-joined', { userName });
         
-        if (rooms.has(room)) {
-            socket.join(room);
-            socket.data.userName = userName;
-            socket.data.room = room;
-            
-            rooms.get(room).add(socket.id);
-            
-            // Odadaki diğer kullanıcılara bildir
-            socket.to(room).emit('user-joined', { userName });
-            
-            // Yeni katılan kullanıcıya mevcut kullanıcıları bildir
-            const existingUsers = Array.from(rooms.get(room))
-                .filter(id => id !== socket.id)
-                .map(id => io.sockets.sockets.get(id)?.data.userName)
-                .filter(Boolean);
-            
-            socket.emit('existing-users', { users: existingUsers });
-            
-            console.log(`👤 ${userName} odaya katıldı: ${room}`);
-            
-            // WebRTC bağlantısını başlat - her iki kullanıcıya da bildir (sadece 2 kişi olduğunda)
-            // WebRTC bağlantısını başlat - 2 saniye bekle ki stream'ler hazır olsun
-if (rooms.get(room).size === 2) {
-    setTimeout(() => {
-        const users = Array.from(rooms.get(room));
-        const firstUser = users[0];
-        const secondUser = users[1];
+        // Yeni katılan kullanıcıya mevcut kullanıcıları bildir
+        const existingUsers = Array.from(rooms.get(room))
+            .filter(id => id !== socket.id)
+            .map(id => io.sockets.sockets.get(id)?.data.userName)
+            .filter(Boolean);
         
-        // İlk kullanıcıya ikinci kullanıcının katıldığını bildir
-        io.to(firstUser).emit('ready-to-call', { 
-            userId: secondUser,
-            userName: io.sockets.sockets.get(secondUser)?.data.userName 
-        });
+        socket.emit('existing-users', { users: existingUsers });
         
-        // İkinci kullanıcıya ilk kullanıcının katıldığını bildir
-        io.to(secondUser).emit('ready-to-call', { 
-            userId: firstUser,
-            userName: io.sockets.sockets.get(firstUser)?.data.userName 
-        });
-    }, 2000);
-}
-            if (callback) callback({ success: true });
-        } else {
-            if (callback) callback({ error: 'Oda bulunamadı!' });
-            socket.emit('error', { message: 'Oda bulunamadı!' });
+        console.log(`👤 ${userName} odaya katıldı: ${room}`);
+        
+        // WebRTC bağlantısını başlat - 2 saniye bekle ki stream'ler hazır olsun
+        if (rooms.get(room).size === 2) {
+            setTimeout(() => {
+                const users = Array.from(rooms.get(room));
+                const firstUser = users[0];
+                const secondUser = users[1];
+                
+                // Her iki kullanıcıya da ready-to-call gönder
+                io.to(firstUser).emit('ready-to-call', { 
+                    userId: secondUser,
+                    userName: io.sockets.sockets.get(secondUser)?.data.userName 
+                });
+                
+                io.to(secondUser).emit('ready-to-call', { 
+                    userId: firstUser,
+                    userName: io.sockets.sockets.get(firstUser)?.data.userName 
+                });
+            }, 2000);
         }
-    });
+        
+        if (callback) callback({ success: true });
+    } else {
+        if (callback) callback({ error: 'Oda bulunamadı!' });
+        socket.emit('error', { message: 'Oda bulunamadı!' });
+    }
+});
 
     socket.on('offer', (data) => {
         console.log('📤 Offer gönderiliyor');
@@ -161,25 +182,31 @@ if (rooms.get(room).size === 2) {
         handleDisconnect(socket);
     });
 
-    function handleDisconnect(socket) {
-        const room = socket.data.room;
-        if (room && rooms.has(room)) {
-            rooms.get(room).delete(socket.id);
-            
-            if (rooms.get(room).size === 0) {
-                rooms.delete(room);
-                console.log(`🗑️ Oda silindi: ${room}`);
-            } else {
-                socket.to(room).emit('user-left', { 
-                    userName: socket.data.userName,
-                    userId: socket.id
-                });
-                socket.to(room).emit('peer-disconnected', { userId: socket.id });
-            }
-            
-            console.log(`👋 ${socket.data.userName} ayrıldı: ${room}`);
+function handleDisconnect(socket) {
+    const room = socket.data.room;
+    if (room && rooms.has(room)) {
+        rooms.get(room).delete(socket.id);
+        
+        // Odadaki kalan kullanıcılara bildir
+        socket.to(room).emit('user-left', { 
+            userName: socket.data.userName,
+            userId: socket.id
+        });
+        socket.to(room).emit('peer-disconnected', { userId: socket.id });
+        
+        if (rooms.get(room).size === 0) {
+            rooms.delete(room);
+            console.log(`🗑️ Oda silindi: ${room}`);
         }
+        
+        console.log(`👋 ${socket.data.userName} ayrıldı: ${room}`);
     }
+    
+    // Socket'ten ayrıl
+    socket.leave(room);
+}
+
+
 });
 
 // Port - Render PORT env variable kullanır
