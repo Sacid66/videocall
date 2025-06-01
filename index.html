@@ -531,7 +531,7 @@
         this.isCameraOff = false;
         this.isConnected = false;
         this.remoteUserId = null;
-        this.isStreamReady = false; // Stream hazır mı kontrolü için
+        this.isStreamReady = false; 
         
         this.configuration = {
             iceServers: [
@@ -584,7 +584,7 @@
             });
             
 this.socket.on('ready-to-call', async (data) => {
-    // Kendi socket ID'miz küçükse offer gönderen oluruz
+    
     const shouldCreateOffer = this.socket.id < data.userId;
     
     this.remoteUserId = data.userId;
@@ -743,7 +743,7 @@ this.socket.on('ready-to-call', async (data) => {
             document.getElementById('localUserName').textContent = this.userName;
             this.showVideoScreen();
             this.showStatus('Kamera açıldı!', 'success');
-            this.isStreamReady = true; // Stream hazır
+            this.isStreamReady = true; 
             
         } catch (error) {
             console.error('Medya erişim hatası:', error);
@@ -767,7 +767,7 @@ this.socket.on('ready-to-call', async (data) => {
    console.log('Setup PeerConnection, localStream:', this.localStream);
    this.peerConnection = new RTCPeerConnection(this.configuration);
    
-   // Önce track'leri ekle
+  
    if (this.localStream) {
        this.localStream.getTracks().forEach(track => {
            console.log('Track ekleniyor:', track.kind);
@@ -825,7 +825,7 @@ this.socket.on('ready-to-call', async (data) => {
         await this.setupPeerConnection();
     }
     
-    // Eğer peer connection uygun durumda değilse bekle
+    
     if (this.peerConnection.signalingState !== 'stable') {
         console.log('Peer connection henüz hazır değil, bekleniyor...');
         setTimeout(() => this.createOffer(), 500);
@@ -860,8 +860,7 @@ this.socket.on('ready-to-call', async (data) => {
         await this.setupPeerConnection();
     }
     
-    // Eğer zaten bir offer varsa, yeni peer connection oluştur
-    // Eğer zaten local description varsa, bu offer'ı reddet
+
 if (this.peerConnection.signalingState !== 'stable') {
     console.log('Zaten offer gönderdik, gelen offer reddediliyor');
     return;
@@ -890,7 +889,7 @@ if (this.peerConnection.signalingState !== 'stable') {
     try {
         console.log('Answer geldi, peer connection state:', this.peerConnection.signalingState);
         
-        // have-local-offer durumunda answer kabul et
+       
 if (this.peerConnection.signalingState === 'have-local-offer') {
     await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
     console.log('Answer işlendi başarıyla');
