@@ -1830,7 +1830,7 @@ handleUserLeft() {
 
 
 endCall() {
-   const wasHost = this.isHost;
+    const wasHost = this.isHost;
 
     this.cleanupConnections();
     
@@ -1845,19 +1845,15 @@ endCall() {
     }
     
     if (this.socket && this.currentRoom) {
-        // ÖNCE EVENT GÖNDER
         if (wasHost) {
             this.socket.emit('host-ended-call', { room: this.currentRoom });
         } else {
             this.socket.emit('participant-left', { room: this.currentRoom });
         }
         
-        // SONRA ROOM'DAN ÇIK - BU SATIRLARI EKLE
-        this.socket.emit('leave-room');
-        this.socket.leave(this.currentRoom); // Bu satırı ekle
+        this.socket.emit('leave-room'); // Sadece bu yeter
     }
 
-    // UI durumlarını sıfırla
     this.resetUIStates();
     this.resetToHomeScreenUI();
 
