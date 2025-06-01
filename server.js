@@ -103,25 +103,35 @@ io.on('connection', (socket) => {
         
         console.log(`👤 ${userName} odaya katıldı: ${room}`);
         
-        // WebRTC bağlantısını başlat - 2 saniye bekle ki stream'ler hazır olsun
-        if (rooms.get(room).size === 2) {
-            setTimeout(() => {
-                const users = Array.from(rooms.get(room));
-                const firstUser = users[0];
-                const secondUser = users[1];
-                
-                // Her iki kullanıcıya da ready-to-call gönder
-                io.to(firstUser).emit('ready-to-call', { 
-                    userId: secondUser,
-                    userName: io.sockets.sockets.get(secondUser)?.data.userName 
-                });
-                
-                io.to(secondUser).emit('ready-to-call', { 
-                    userId: firstUser,
-                    userName: io.sockets.sockets.get(firstUser)?.data.userName 
-                });
-            }, 2000);
-        }
+// ready-to-call kısmını şu şekilde değiştir (mevcut setTimeout kısmını değiştir):
+if (rooms.get(room).size === 2) {
+    setTimeout(() => {
+        const users = Array.from(rooms.get(room));
+        if (users.length !== 2) return; // Güvenlik kontrolü
+        
+        const firstUser = users[0];
+        const secondUser = users[1];
+        
+        // Önce her iki kullanıcıya da peer-reset gönder
+        io.to(firstUser).emit('peer-reset');
+        io.to(secondUser).emit('peer-reset');
+        
+        // Sonra ready-to-call gönder
+        setTimeout(() => {
+            io.to(firstUser).emit('ready-to-call', { 
+                userId: secondUser,
+                userName: io.sockets.sockets.get(secondUser)?.data.userName,
+                shouldOffer: firstUser < secondUser // Deterministik karar
+            });
+            
+            io.to(secondUser).emit('ready-to-call', { 
+                userId: firstUser,
+                userName: io.sockets.sockets.get(firstUser)?.data.userName,
+                shouldOffer: secondUser < firstUser // Tersi
+            });
+        }, 500);
+    }, 2000);
+}
         
         if (callback) callback({ success: true });
     } else {
