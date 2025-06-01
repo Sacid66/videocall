@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@900&display=swap" rel="stylesheet">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Video Chat System</title>
@@ -366,28 +368,31 @@ input, textarea {
         }
 
         .mic-btn {
-            background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-            color: var(--bg-primary);
-        }
+    background: linear-gradient(135deg, #222222, #34495e);
+    color: white;
+    order: 1;
+}
 
         .mic-btn.muted {
-            background: linear-gradient(135deg, var(--danger), #ff3742);
+            background: linear-gradient(135deg, var(--danger), #2b2b2b);
             color: white;
         }
 
         .cam-btn {
-            background: linear-gradient(135deg, #3742fa, #2f3542);
+            background: linear-gradient(135deg, #222222, #2f3542);
             color: white;
+            order: 3;
         }
 
         .cam-btn.disabled {
-            background: linear-gradient(135deg, var(--danger), #ff3742);
+            background: linear-gradient(135deg, var(--danger), #1f1f1f);
         }
 
         .end-btn {
-            background: linear-gradient(135deg, var(--danger), #ff3742);
-            color: white;
-        }
+    background: linear-gradient(135deg, var(--danger), #1a1a1a);
+    color: white;
+    order: 2; /* Sona koy */
+}
 
         .control-btn:hover {
             transform: scale(1.1) rotate(5deg);
@@ -443,6 +448,19 @@ input, textarea {
             0%, 50% { opacity: 1; }
             51%, 100% { opacity: 0.3; }
         }
+
+
+
+        @keyframes messageSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
 
         .hidden {
             display: none !important;
@@ -623,21 +641,24 @@ input, textarea {
 }
 
         .chat-header {
-            text-align: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid var(--glass-border);
-            position: relative; /* Bu satır eklenecek */
-            display: flex; /* Bu satır eklenecek */
-            justify-content: center; /* Bu satır eklenecek */
-            align-items: center; /* Bu satır eklenecek */
-        }
+    text-align: left; /* center yerine left */
+    margin-bottom: 20px;
+    padding-bottom: 0px; /* 15px yerine 0px */
+    border-bottom: none; /* çizgiyi kaldır */
+    position: relative;
+    display: flex;
+    justify-content: flex-start; /* center yerine flex-start */
+    align-items: center;
+}
 
-        .chat-header h3 {
-            color: var(--accent);
-            font-size: 1.2rem;
-            margin: 0;
-        }
+.chat-header h3 {
+    color: var(--text-primary);
+    font-size: 2.2rem;
+    margin: 0;
+    font-weight: 900;
+    font-family: 'Lexend', sans-serif; /* Lexend fontunu ekle */
+}
+
 
         .chat-messages {
             flex: 1;
@@ -660,37 +681,102 @@ input, textarea {
             border-radius: 3px;
         }
 
-        .message {
-            margin-bottom: 12px;
-            padding: 10px 15px;
-            border-radius: 12px;
-            max-width: 80%;
-            word-wrap: break-word;
-        }
+.message {
+    margin-bottom: 12px;
+    padding: 0;
+    border-radius: 0;
+    max-width: 100%;
+    word-wrap: break-word;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    animation: messageSlideIn 0.3s ease-out; /* Animasyon ekle */
+}
 
-        .message.own {
-            background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-            color: var(--bg-primary);
-            margin-left: auto;
-            text-align: right;
-        }
+.message.own {
+    background: none;
+    color: var(--text-primary);
+    margin-left: 0;
+    text-align: left;
+    justify-content: flex-end; /* sağa hizala */
+}
 
-        .message.other {
-            background: var(--bg-secondary);
-            color: var(--text-primary);
-            margin-right: auto;
-        }
+
+.message.other {
+    background: none;
+    color: var(--text-primary);
+    margin-right: 0;
+    justify-content: flex-start; /* sola hizala */
+}
+
+
+.message-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #000000;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 12px;
+    flex-shrink: 0;
+    margin-top: 0; /* 2px'i kaldır */
+}
+
+
+.message-bubble {
+    background: var(--bg-secondary);
+    padding: 12px;
+    border-radius: 25px;
+    max-width: 250px;
+    min-width: 120px;
+    border: 2px solid var(--glass-border);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px; /* 12px yerine 8px - daha yakın */
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    box-sizing: border-box;
+}
+
+
+.message-content {
+    background: var(--bg-secondary);
+    padding: 12px 16px;
+    border-radius: 20px;
+    max-width: 70%;
+}
+
+.message.own .message-bubble {
+    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    color: var(--bg-primary);
+    border: 2px solid var(--accent);
+}
+
+
 
         .message-sender {
+            display: none;
             font-size: 0.8rem;
             opacity: 0.7;
             margin-bottom: 4px;
         }
 
-        .message-text {
-            font-size: 0.9rem;
-        }
-
+.message-text {
+    font-size: 0.9rem;
+    color: inherit;
+    font-family: 'Lexend', sans-serif;
+    font-weight: 600;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+    flex: 1;
+    max-width: calc(250px - 65px); /* 50px yerine 65px - daha erken kesilsin */
+    line-height: 1.3;
+    margin-top: 3px;
+}
         .chat-input-container {
             display: flex;
             gap: 10px;
@@ -698,16 +784,16 @@ input, textarea {
         }
 
         .chat-input {
-            flex: 1;
-            padding: 12px 16px;
-            background: var(--bg-secondary);
-            border: 2px solid transparent;
-            border-radius: 20px;
-            color: var(--text-primary);
-            font-size: 14px;
-            outline: none;
-            transition: all 0.3s ease;
-        }
+    flex: 1;
+    padding: 16px 20px; /* 12px 16px yerine 16px 20px */
+    background: var(--bg-tertiary); /* bg-secondary yerine bg-tertiary */
+    border: 2px solid transparent;
+    border-radius: 25px; /* 20px yerine 25px - daha yuvarlak */
+    color: var(--text-primary);
+    font-size: 15px; /* 14px yerine 15px */
+    outline: none;
+    transition: all 0.3s ease;
+}
 
         .chat-input:focus {
             border-color: var(--accent);
@@ -715,16 +801,16 @@ input, textarea {
         }
 
         .chat-send-btn {
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-            color: var(--bg-primary);
-            border: none;
-            cursor: pointer;
-            font-size: 18px;
-            transition: all 0.3s ease;
-        }
+    width: 48px; /* 44px yerine 48px */
+    height: 48px; /* 44px yerine 48px */
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    color: var(--bg-primary);
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.3s ease;
+}
 
         .chat-send-btn:hover {
             transform: scale(1.1);
@@ -788,28 +874,28 @@ input, textarea {
     </div>
         
         <div class="controls">
-            <button class="control-btn mic-btn" id="micBtn" title="Mikrofon">🎤</button>
-            <button class="control-btn cam-btn" id="camBtn" title="Kamera">📹</button>
-            <button class="control-btn end-btn" id="endBtn" title="Aramayı Sonlandır">📞</button>
-        </div>
+    <button class="control-btn mic-btn" id="micBtn" title="Mikrofon"><i class="fas fa-microphone"></i></button>
+    <button class="control-btn cam-btn" id="camBtn" title="Kamera"><i class="fas fa-video"></i></button>
+    <button class="control-btn end-btn" id="endBtn" title="Aramayı Sonlandır"><i class="fas fa-phone"></i></button>
+</div>
         
        
 
-        <button class="chat-toggle-btn" id="chatToggleBtn">CHAT</button>
+        <button class="chat-toggle-btn" id="chatToggleBtn"><i class="fas fa-comments"></i></button>
     </div>
     
     <!-- Chat panel video panel'inin dışında -->
     <div class="chat-panel" id="chatPanel">
         <div class="chat-header">
-            <h3>💬 Sohbet</h3>
-            <button class="mobile-close-btn" id="mobileCloseBtn">✕</button>
-        </div>
+    <h3>Sohbet</h3>
+    <button class="mobile-close-btn" id="mobileCloseBtn">✕</button>
+</div>
         <div class="chat-messages" id="chatMessages">
             <!-- Mesajlar buraya gelecek -->
         </div>
         <div class="chat-input-container">
             <input type="text" class="chat-input" id="chatInput" placeholder="Mesajınızı yazın..." maxlength="200">
-            <button class="chat-send-btn" id="chatSendBtn">📤</button>
+            <button class="chat-send-btn" id="chatSendBtn"><i class="fas fa-paper-plane"></i></button>
         </div>
     </div>
 </div>
@@ -979,12 +1065,12 @@ input, textarea {
     if (this.isChatOpen) {
         videoPanel.classList.add('chat-active');
         chatPanel.classList.add('active');
-        chatBtn.textContent = '✕';
+        chatBtn.innerHTML = '<i class="fas fa-times"></i>';
         chatBtn.classList.add('chat-open'); // Bu satırı ekle
     } else {
         videoPanel.classList.remove('chat-active');
         chatPanel.classList.remove('active');
-        chatBtn.textContent = 'CHAT';
+        chatBtn.innerHTML = '<i class="fas fa-comments"></i>';
         chatBtn.classList.remove('chat-open'); // Bu satırı ekle
     }
 }
@@ -1016,19 +1102,23 @@ input, textarea {
                 chatInput.value = '';
             }
 
-            displayMessage(message) {
-                const chatMessages = document.getElementById('chatMessages');
-                const messageDiv = document.createElement('div');
-                messageDiv.className = `message ${message.isOwn ? 'own' : 'other'}`;
-                
-                messageDiv.innerHTML = `
-                    <div class="message-sender">${message.sender}</div>
-                    <div class="message-text">${message.text}</div>
-                `;
-                
-                chatMessages.appendChild(messageDiv);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            }
+displayMessage(message) {
+    const chatMessages = document.getElementById('chatMessages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${message.isOwn ? 'own' : 'other'}`;
+    
+    const firstLetter = message.sender.charAt(0).toUpperCase();
+    
+    messageDiv.innerHTML = `
+    <div class="message-bubble">
+        <div class="message-avatar">${firstLetter}</div>
+        <div class="message-text">${message.text}</div>
+    </div>
+`;
+    
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
 
             updateConnectionStatus(status, text) {
                 const indicator = document.getElementById('connectionIndicator');
@@ -1307,10 +1397,10 @@ input, textarea {
                         const micBtn = document.getElementById('micBtn');
                         if (this.isMuted) {
                             micBtn.classList.add('muted');
-                            micBtn.textContent = '🔇';
+                            micBtn.innerHTML = '<i class="fas fa-microphone-slash"></i>';
                         } else {
                             micBtn.classList.remove('muted');
-                            micBtn.textContent = '🎤';
+                            micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
                         }
                     }
                 }
@@ -1325,10 +1415,10 @@ input, textarea {
                         const camBtn = document.getElementById('camBtn');
                         if (this.isCameraOff) {
                             camBtn.classList.add('disabled');
-                            camBtn.textContent = '📷';
+                            camBtn.innerHTML = '<i class="fas fa-video-slash"></i>';
                         } else {
                             camBtn.classList.remove('disabled');
-                            camBtn.textContent = '📹';
+                            camBtn.innerHTML = '<i class="fas fa-video"></i>';
                         }
                     }
                 }
