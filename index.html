@@ -880,17 +880,21 @@
 }
             
    async handleAnswer(data) {
-    if (this.peerConnection && this.peerConnection.signalingState === 'have-local-offer') {
-        try {
-            console.log('Answer alındı, signaling state:', this.peerConnection.signalingState);
-            await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-            console.log('Answer başarıyla set edildi');
-        } catch (error) {
-            console.error('Answer işleme hatası:', error);
-            this.showStatus('Answer işlenemedi', 'error');
+    try {
+        console.log('Answer geldi, peer connection state:', this.peerConnection.signalingState);
+        
+        // Eğer peer connection uygun durumda değilse bekle
+        if (this.peerConnection.signalingState !== 'have-local-offer') {
+            console.log('Answer geldi ama peer connection uygun durumda değil:', this.peerConnection.signalingState);
+            return;
         }
-    } else {
-        console.warn('Answer geldi ama peer connection uygun durumda değil:', this.peerConnection?.signalingState);
+        
+        await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+        console.log('Answer işlendi başarıyla');
+        
+    } catch (error) {
+        console.error('Answer işleme hatası:', error);
+        this.showStatus('Answer işlenemedi', 'error');
     }
 }
             
