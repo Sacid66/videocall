@@ -1134,19 +1134,32 @@ input, textarea {
             }
 
                // BURAYA EKLE - diğer metodlarla aynı seviyede
-    cleanupConnections() {
-        if (this.peerConnection) {
-            this.peerConnection.close();
-            this.peerConnection = null;
-        }
-        if (this.localStream) {
-            this.localStream.getTracks().forEach(track => track.stop());
-            this.localStream = null;
-        }
-        this.isStreamReady = false;
-        this.isConnected = false;
-        this.remoteUserId = null;
+cleanupConnections() {
+    // Peer connection'ı kapat
+    if (this.peerConnection) {
+        this.peerConnection.close();
+        this.peerConnection = null;
     }
+    
+    // Local stream'i tamamen durdur
+    if (this.localStream) {
+        this.localStream.getTracks().forEach(track => {
+            track.stop(); // Track'i durdur
+        });
+        this.localStream = null;
+    }
+    
+    // Video elementlerini temizle
+    const localVideo = document.getElementById('localVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
+    if (localVideo) localVideo.srcObject = null;
+    if (remoteVideo) remoteVideo.srcObject = null;
+    
+    this.isStreamReady = false;
+    this.isConnected = false;
+    this.remoteUserId = null;
+    this.remoteStream = null;
+}
 
             initializeSocket() {
                 try {
@@ -1475,37 +1488,45 @@ async joinRoom() {
     });
 }
 
-            async startLocalStream() {
-                try {
-                    // Mobil için daha düşük kalite
-       const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-       
-       this.localStream = await navigator.mediaDevices.getUserMedia({
-           video: {
-               width: { ideal: isMobile ? 640 : 1280, max: isMobile ? 640 : 1920 },
-               height: { ideal: isMobile ? 480 : 720, max: isMobile ? 480 : 1080 },
-               facingMode: 'user',
-               frameRate: { ideal: isMobile ? 15 : 30 }
-           },
-           audio: {
-               echoCancellation: true,
-               noiseSuppression: isMobile ? false : true,
-               autoGainControl: true,
-               sampleRate: isMobile ? 16000 : 44100
-           }
-       });
-
-                    document.getElementById('localVideo').srcObject = this.localStream;
-                    document.getElementById('localUserName').textContent = this.userName;
-                    this.showVideoScreen();
-                    this.showStatus('🎥 Kamera açıldı!', 'success');
-                    this.isStreamReady = true;
-                } catch (error) {
-                    console.error('Medya erişim hatası:', error);
-                    this.showStatus('🚫 Kamera veya mikrofon erişimi reddedildi!', 'error');
-                    this.isStreamReady = false;
-                }
+async startLocalStream() {
+    try {
+        // Önceki stream varsa tamamen temizle
+        if (this.localStream) {
+            this.localStream.getTracks().forEach(track => track.stop());
+        }
+        
+        // Mobil için daha düşük kalite
+        const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        // Yeni stream al
+        this.localStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                width: { ideal: isMobile ? 640 : 1280, max: isMobile ? 640 : 1920 },
+                height: { ideal: isMobile ? 480 : 720, max: isMobile ? 480 : 1080 },
+                facingMode: 'user',
+                frameRate: { ideal: isMobile ? 15 : 30 }
+            },
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: isMobile ? false : true,
+                autoGainControl: true,
+                sampleRate: isMobile ? 16000 : 44100
             }
+        });
+
+        document.getElementById('localVideo').srcObject = this.localStream;
+        document.getElementById('localUserName').textContent = this.userName;
+        this.showVideoScreen();
+        this.showStatus('🎥 Kamera açıldı!', 'success');
+        this.isStreamReady = true;
+        
+        console.log('Local stream başarıyla başlatıldı:', this.localStream);
+    } catch (error) {
+        console.error('Medya erişim hatası:', error);
+        this.showStatus('🚫 Kamera veya mikrofon erişimi reddedildi!', 'error');
+        this.isStreamReady = false;
+    }
+}
 
             async handleReadyToCall(data) {
                 if (!this.peerConnection || this.peerConnection.signalingState === 'closed') {
@@ -1724,6 +1745,8 @@ async joinRoom() {
 
 endCall() {
     const wasHost = this.isHost;
+
+    this.cleanupConnections();
     
     if (this.localStream) {
         this.localStream.getTracks().forEach(track => track.stop());
@@ -1745,6 +1768,7 @@ endCall() {
 
     // UI durumlarını sıfırla
     this.resetUIStates();
+    this.resetToHomeScreenUI();
 
     document.getElementById('videoScreen').classList.add('hidden');
     document.getElementById('homeScreen').classList.remove('hidden');
