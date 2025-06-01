@@ -183,16 +183,24 @@ if (rooms.get(room).size === 2) {
 });
 
 
-// BU İKİ EVENT'İ BURAYA EKLE
 socket.on('host-ended-call', (data) => {
     const room = data.room;
     console.log(`🚪 Host aramayı sonlandırdı: ${room}`);
     
+    // Odadaki diğer kullanıcılara bildir - SADECE BİLGİ VER, ATMA
     socket.to(room).emit('host-ended-call');
     
+    // Oda temizliği - SADECE HOST'U SİL
     if (rooms.has(room)) {
-        rooms.delete(room);
-        console.log(`🗑️ Host tarafından oda silindi: ${room}`);
+        rooms.get(room).delete(socket.id); // Sadece host'u sil
+        
+        // Eğer oda boş kaldıysa tamamen sil
+        if (rooms.get(room).size === 0) {
+            rooms.delete(room);
+            console.log(`🗑️ Oda tamamen boş kaldığı için silindi: ${room}`);
+        } else {
+            console.log(`🏠 Oda hala aktif, katılımcı bekliyor: ${room}`);
+        }
     }
 });
 
