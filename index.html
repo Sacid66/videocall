@@ -531,6 +531,16 @@ input, textarea {
         z-index: 9999 !important;
     }
 
+    .screen-btn {
+        position: absolute !important;
+        bottom: 5px !important;
+        left: 6px !important; /* Chat butonunun solunda */
+        width: 60px !important;
+        height: 45px !important;
+        font-size: 12px !important;
+        z-index: 999 !important;
+    }
+
     .chat-input-container {
         display: flex !important;
         gap: 10px !important;
@@ -581,7 +591,7 @@ input, textarea {
     .chat-toggle-btn {
         position: absolute !important; /* fixed yerine absolute */
         bottom: 5px !important; /* Kutu içinde aşağıda */
-        right: 9px !important; /* Kutu içinde sağda */
+        right: 6px !important; /* Kutu içinde sağda */
         width: 60px !important; /* 80px yerine 60px */
         height: 45px !important; /* 60px yerine 45px */
         font-size: 12px !important; /* 16px yerine 12px */
@@ -1015,6 +1025,137 @@ input, textarea {
     color: var(--accent);
 }
 
+.screen-btn {
+    position: fixed;
+    bottom: 30px;
+    right: 120px; /* Chat butonunun solunda */
+    width: 80px;
+    height: 60px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, #ff6b35, #f7931e);
+    color: var(--bg-primary);
+    border: none;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 8px 25px rgba(255, 107, 53, 0.3);
+    z-index: 1000;
+    text-transform: uppercase;
+}
+
+.screen-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 12px 35px rgba(255, 107, 53, 0.5);
+}
+
+.screen-btn.sharing {
+    background: linear-gradient(135deg, var(--danger), #ff3742);
+}
+
+
+.video-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.9);
+    backdrop-filter: blur(20px);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+
+.video-overlay.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.video-overlay-content {
+    width: 90vw;
+    height: 90vh;
+    max-width: 1200px;
+    max-height: 800px;
+    border-radius: 24px;
+    overflow: hidden;
+    transform: scale(0.8);
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 50px 100px rgba(0, 0, 0, 0.8);
+    position: relative;
+}
+
+.video-overlay.active .video-overlay-content {
+    transform: scale(1);
+}
+
+.video-overlay video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 24px;
+}
+
+.video-overlay-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.video-overlay-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+}
+
+.video-overlay-label {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 16px;
+    font-family: 'Lexend', sans-serif;
+    font-weight: 600;
+    font-size: 16px;
+    backdrop-filter: blur(10px);
+}
+
+/* Video preview'da blur effect */
+.video-panel.video-preview {
+    filter: blur(15px);
+    transition: filter 0.5s ease;
+}
+
+/* Video wrapper'ları clickable yap */
+.video-wrapper {
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.video-wrapper:hover {
+    transform: scale(1.02);
+    box-shadow: 0 10px 30px rgba(0, 255, 136, 0.3);
+}
+
 
     </style>
 </head>
@@ -1088,8 +1229,16 @@ input, textarea {
 </div>
         
        
-
+        <button class="control-btn screen-btn" id="screenBtn" title="Ekran Paylaş"><i class="fas fa-desktop"></i></button>
         <button class="chat-toggle-btn" id="chatToggleBtn"><i class="fas fa-comments"></i></button>
+    </div>
+
+    <div class="video-overlay" id="videoOverlay">
+        <div class="video-overlay-content">
+            <video class="video-element" id="overlayVideo" autoplay muted playsinline></video>
+            <button class="video-overlay-close" id="overlayCloseBtn">✕</button>
+            <div class="video-overlay-label" id="overlayLabel">Kullanıcı</div>
+        </div>
     </div>
     
     <!-- Chat panel video panel'inin dışında -->
@@ -1127,6 +1276,8 @@ input, textarea {
                 this.chatMessages = [];
                 this.isHost = false; // BU SATIRI EKLE
                 this.isJoinMode = false;
+                this.isScreenSharing = false;
+                this.screenStream = null;
 
                 this.configuration = {
                     iceServers: [
@@ -1174,6 +1325,31 @@ cleanupConnections() {
     this.isConnected = false;
     this.remoteUserId = null;
     this.remoteStream = null;
+}
+
+showVideoOverlay(videoElement, userName) {
+    const overlay = document.getElementById('videoOverlay');
+    const overlayVideo = document.getElementById('overlayVideo');
+    const overlayLabel = document.getElementById('overlayLabel');
+    const videoPanel = document.querySelector('.video-panel');
+    
+    // Video stream'ini overlay'e kopyala
+    overlayVideo.srcObject = videoElement.srcObject;
+    overlayLabel.textContent = userName;
+    
+    // Arka planı blurla ve overlay'i göster
+    videoPanel.classList.add('video-preview');
+    overlay.classList.add('active');
+}
+
+
+hideVideoOverlay() {
+    const overlay = document.getElementById('videoOverlay');
+    const videoPanel = document.querySelector('.video-panel');
+    
+    // Blur'u kaldır ve overlay'i gizle
+    videoPanel.classList.remove('video-preview');
+    overlay.classList.remove('active');
 }
 
             initializeSocket() {
@@ -1509,6 +1685,103 @@ async createRoom() {
 
     this.showStatus('🏗️ Oda oluşturuluyor...', 'success');
     await this.startLocalStream();
+}
+
+async shareScreen() {
+    try {
+        if (this.isScreenSharing) {
+            // Ekran paylaşımını durdur
+            await this.stopScreenShare();
+            return;
+        }
+
+        // Ekran paylaşımını başlat
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+                width: { ideal: 1920, max: 1920 },
+                height: { ideal: 1080, max: 1080 },
+                frameRate: { ideal: 30, max: 60 }
+            },
+            audio: true // Sistem sesini de paylaş
+        });
+
+        // Ekran paylaşımı stream'ini local video'ya ata
+        document.getElementById('localVideo').srcObject = screenStream;
+        
+        // PeerConnection'daki video track'ini değiştir
+        if (this.peerConnection && this.localStream) {
+            const videoTrack = screenStream.getVideoTracks()[0];
+            const sender = this.peerConnection.getSenders().find(s => 
+                s.track && s.track.kind === 'video'
+            );
+            
+            if (sender) {
+                await sender.replaceTrack(videoTrack);
+            }
+        }
+
+        // Ekran paylaşımı durumunu güncelle
+        this.isScreenSharing = true;
+        this.screenStream = screenStream;
+        
+        // Buton görünümünü güncelle
+        const screenBtn = document.getElementById('screenBtn');
+        screenBtn.classList.add('sharing');
+        screenBtn.innerHTML = '<i class="fas fa-stop"></i>';
+        screenBtn.title = 'Ekran Paylaşımını Durdur';
+
+        // Ekran paylaşımı bittiğinde otomatik durdur
+        screenStream.getVideoTracks()[0].onended = () => {
+            this.stopScreenShare();
+        };
+
+        this.showStatus('🖥️ Ekran paylaşımı başlatıldı!', 'success');
+
+    } catch (error) {
+        console.error('Ekran paylaşımı hatası:', error);
+        this.showStatus('🚫 Ekran paylaşımı başlatılamadı!', 'error');
+    }
+}
+
+async stopScreenShare() {
+    try {
+        // Ekran stream'ini durdur
+        if (this.screenStream) {
+            this.screenStream.getTracks().forEach(track => track.stop());
+            this.screenStream = null;
+        }
+
+        // Kameraya geri dön
+        if (this.localStream) {
+            document.getElementById('localVideo').srcObject = this.localStream;
+            
+            // PeerConnection'daki video track'ini geri değiştir
+            if (this.peerConnection) {
+                const videoTrack = this.localStream.getVideoTracks()[0];
+                const sender = this.peerConnection.getSenders().find(s => 
+                    s.track && s.track.kind === 'video'
+                );
+                
+                if (sender && videoTrack) {
+                    await sender.replaceTrack(videoTrack);
+                }
+            }
+        }
+
+        // Durumu sıfırla
+        this.isScreenSharing = false;
+        
+        // Buton görünümünü sıfırla
+        const screenBtn = document.getElementById('screenBtn');
+        screenBtn.classList.remove('sharing');
+        screenBtn.innerHTML = '<i class="fas fa-desktop"></i>';
+        screenBtn.title = 'Ekran Paylaş';
+
+        this.showStatus('📷 Kameraya geri dönüldü!', 'success');
+
+    } catch (error) {
+        console.error('Ekran paylaşımı durdurma hatası:', error);
+    }
 }
 
 async joinRoom() {
@@ -1990,28 +2263,54 @@ toggleMode() {
             }
         }
 
-        window.addEventListener('load', () => {
-            const videoChat = new VideoChat();
+window.addEventListener('load', () => {
+   const videoChat = new VideoChat();
 
-            if (!navigator.mediaDevices || !window.RTCPeerConnection) {
-                videoChat.showStatus('🚫 Tarayıcınız görüntülü konuşmayı desteklemiyor!', 'error');
-            }
+   if (!navigator.mediaDevices || !window.RTCPeerConnection) {
+       videoChat.showStatus('🚫 Tarayıcınız görüntülü konuşmayı desteklemiyor!', 'error');
+   }
 
-            document.getElementById('createRoomBtn').addEventListener('click', () => videoChat.createRoom());
-            document.getElementById('joinRoomBtn').addEventListener('click', () => videoChat.joinRoom());
-            document.getElementById('micBtn').addEventListener('click', () => videoChat.toggleMic());
-            document.getElementById('camBtn').addEventListener('click', () => videoChat.toggleCamera());
-            document.getElementById('endBtn').addEventListener('click', () => videoChat.endCall());
-            document.getElementById('chatToggleBtn').addEventListener('click', () => videoChat.toggleChat());
-            document.getElementById('chatSendBtn').addEventListener('click', () => videoChat.sendMessage());
-            document.getElementById('chatInput').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    videoChat.sendMessage();
-                }
-            });
-            document.getElementById('mobileCloseBtn').addEventListener('click', () => videoChat.toggleChat());
-            document.getElementById('toggleText').addEventListener('click', () => videoChat.toggleMode());
-        });
+   document.getElementById('createRoomBtn').addEventListener('click', () => videoChat.createRoom());
+   document.getElementById('joinRoomBtn').addEventListener('click', () => videoChat.joinRoom());
+   document.getElementById('micBtn').addEventListener('click', () => videoChat.toggleMic());
+   document.getElementById('camBtn').addEventListener('click', () => videoChat.toggleCamera());
+   document.getElementById('endBtn').addEventListener('click', () => videoChat.endCall());
+   document.getElementById('chatToggleBtn').addEventListener('click', () => videoChat.toggleChat());
+   document.getElementById('screenBtn').addEventListener('click', () => videoChat.shareScreen());
+   document.getElementById('chatSendBtn').addEventListener('click', () => videoChat.sendMessage());
+   document.getElementById('chatInput').addEventListener('keypress', (e) => {
+       if (e.key === 'Enter') {
+           videoChat.sendMessage();
+       }
+   });
+   document.getElementById('mobileCloseBtn').addEventListener('click', () => videoChat.toggleChat());
+   document.getElementById('toggleText').addEventListener('click', () => videoChat.toggleMode());
+
+   // Video overlay event'leri
+   document.querySelector('#localVideo').parentElement.addEventListener('click', () => {
+       const localVideo = document.getElementById('localVideo');
+       const localUserName = document.getElementById('localUserName').textContent;
+       videoChat.showVideoOverlay(localVideo, localUserName);
+   });
+
+   document.querySelector('#remoteVideo').parentElement.addEventListener('click', () => {
+       const remoteVideo = document.getElementById('remoteVideo');
+       const remoteUserName = document.getElementById('remoteUserName').textContent;
+       if (remoteVideo.srcObject) {
+           videoChat.showVideoOverlay(remoteVideo, remoteUserName);
+       }
+   });
+
+   document.getElementById('overlayCloseBtn').addEventListener('click', () => {
+       videoChat.hideVideoOverlay();
+   });
+
+   document.getElementById('videoOverlay').addEventListener('click', (e) => {
+       if (e.target === e.currentTarget) {
+           videoChat.hideVideoOverlay();
+       }
+   });
+});
     </script>
 </body>
 </html>
