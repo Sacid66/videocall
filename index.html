@@ -26,17 +26,20 @@
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            min-height: 100vh;
-            overflow-x: hidden;
-            position: fixed; /* Scroll'u engelle */
-            width: 100%;
-            height: 100vh;
-            overflow: hidden; /* Scroll bar'ları gizle */
-            -webkit-overflow-scrolling: touch;
-        }
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: fixed; 
+    width: 100%;
+    height: 100vh;
+    overflow: hidden; 
+    -webkit-overflow-scrolling: touch;
+    top: 50%; /* ORTALA */
+    left: 50%; /* ORTALA */
+    transform: translate(-50%, -50%); /* TAM ORTALA */
+}
 
                body, html {
     touch-action: manipulation; /* Zoom'u engelle */
