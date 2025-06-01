@@ -583,20 +583,27 @@
                 }
             });
             
-            this.socket.on('ready-to-call', async (data) => {
+this.socket.on('ready-to-call', async (data) => {
+    // Kendi socket ID'miz küçükse offer gönderen oluruz
+    const shouldCreateOffer = this.socket.id < data.userId;
+    
     this.remoteUserId = data.userId;
     document.getElementById('remoteUserName').textContent = data.userName;
     
-    // Stream hazır olana kadar bekle
     if (!this.isStreamReady) {
         setTimeout(() => {
-            if (this.isStreamReady) {
+            if (this.isStreamReady && shouldCreateOffer) {
                 this.handleReadyToCall(data);
             }
         }, 1000);
         return;
     }
-    await this.handleReadyToCall(data);
+    
+    if (shouldCreateOffer) {
+        await this.handleReadyToCall(data);
+    } else {
+        console.log('Bu kullanıcı offer bekliyor...');
+    }
 });
             
             this.socket.on('offer', async (data) => {
@@ -854,11 +861,11 @@
     }
     
     // Eğer zaten bir offer varsa, yeni peer connection oluştur
-    if (this.peerConnection.signalingState !== 'stable') {
-        console.log('Peer connection durumu uygun değil, yeniden oluşturuluyor...');
-        this.peerConnection.close();
-        await this.setupPeerConnection();
-    }
+    // Eğer zaten local description varsa, bu offer'ı reddet
+if (this.peerConnection.signalingState !== 'stable') {
+    console.log('Zaten offer gönderdik, gelen offer reddediliyor');
+    return;
+}
     
     try {
         console.log('Offer alındı, signaling state:', this.peerConnection.signalingState);
@@ -883,13 +890,15 @@
     try {
         console.log('Answer geldi, peer connection state:', this.peerConnection.signalingState);
         
-        // Sadece have-local-offer durumunda answer kabul et
-        if (this.peerConnection.signalingState === 'have-local-offer') {
-            await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-            console.log('Answer işlendi başarıyla');
-        } else {
-            console.log('Answer reddedildi, yanlış durum:', this.peerConnection.signalingState);
-        }
+        // have-local-offer durumunda answer kabul et
+if (this.peerConnection.signalingState === 'have-local-offer') {
+    await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+    console.log('Answer işlendi başarıyla');
+} else if (this.peerConnection.signalingState === 'stable') {
+    console.log('Answer reddedildi - zaten stable durumda');
+} else {
+    console.log('Answer reddedildi, yanlış durum:', this.peerConnection.signalingState);
+}
         
     } catch (error) {
         console.error('Answer işleme hatası:', error);
