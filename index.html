@@ -1306,10 +1306,23 @@ this.socket.on('peer-disconnected', (data) => {
                     });
 
 
-// BU İKİ YENİ EVENT LİSTENER'I EKLE
 this.socket.on('host-ended-call', () => {
-    this.showStatus('🚪 Host aramayı sonlandırdı', 'error');
-    this.resetToHomeScreen();
+    this.showStatus('🚪 Host ayrıldı, yeni host bekleniyor...', 'warning');
+    
+    // Remote video'yu temizle
+    document.getElementById('remoteVideo').srcObject = null;
+    document.getElementById('remoteUserName').textContent = 'Bekleniyor...';
+    document.getElementById('videoConnectionIndicator').className = 'connection-indicator disconnected';
+    
+    this.isConnected = false;
+    this.clearChat();
+    
+    if (this.peerConnection) {
+        this.peerConnection.close();
+        this.peerConnection = null;
+    }
+    
+    // resetToHomeScreen(); ÇAĞIRMA - odada kal
 });
 
 this.socket.on('participant-left', () => {
