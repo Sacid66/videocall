@@ -317,6 +317,12 @@ input, textarea {
             transition: all 0.3s ease; /* Bu satırı ekle */
         }
 
+
+        /* Video yok iken placeholder */
+.video-element:not([src]) {
+    background: var(--bg-secondary);
+}
+
 .video-label {
     position: absolute;
     bottom: 16px;
@@ -1583,15 +1589,21 @@ async setupPeerConnection() {
         this.peerConnection.addTrack(track, this.localStream);
     });
 
-    // Event listener'ları ekle
-    this.peerConnection.ontrack = (event) => {
-        console.log('🎥 Remote stream alındı!');
-        this.remoteStream = event.streams[0];
-        document.getElementById('remoteVideo').srcObject = this.remoteStream;
-        this.showStatus('🎥 Video bağlantısı kuruldu! 🎉', 'success');
-        document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
-        this.isConnected = true;
-    };
+this.peerConnection.ontrack = (event) => {
+    console.log('🎥 Remote stream alındı!');
+    this.remoteStream = event.streams[0];
+    const remoteVideo = document.getElementById('remoteVideo');
+    
+    if (remoteVideo) {
+        remoteVideo.srcObject = this.remoteStream;
+        // Video gelince background'u temizle
+        remoteVideo.style.background = 'transparent';
+    }
+    
+    this.showStatus('🎥 Video bağlantısı kuruldu! 🎉', 'success');
+    document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
+    this.isConnected = true;
+};
 
     this.peerConnection.onicecandidate = (event) => {
         if (event.candidate && this.remoteUserId) {
