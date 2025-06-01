@@ -1124,7 +1124,7 @@ input, textarea {
                 this.initializeSocket();
 
 
-                // BURAYA EKLE - Constructor'ın en sonuna
+                
     setTimeout(() => {
         const chatMessages = document.getElementById('chatMessages');
         if (chatMessages) {
@@ -1132,6 +1132,21 @@ input, textarea {
         }
     }, 1000);
             }
+
+               // BURAYA EKLE - diğer metodlarla aynı seviyede
+    cleanupConnections() {
+        if (this.peerConnection) {
+            this.peerConnection.close();
+            this.peerConnection = null;
+        }
+        if (this.localStream) {
+            this.localStream.getTracks().forEach(track => track.stop());
+            this.localStream = null;
+        }
+        this.isStreamReady = false;
+        this.isConnected = false;
+        this.remoteUserId = null;
+    }
 
             initializeSocket() {
                 try {
@@ -1408,53 +1423,57 @@ displayMessage(message) {
                 return code;
             }
 
-            async createRoom() {
-                const nameInput = document.getElementById('createUserName').value.trim();
-                if (!nameInput) {
-                    this.showStatus('🚨 Kullanıcı adını girin!', 'error');
-                    return;
-                }
-
-                this.userName = nameInput;
-                this.currentRoom = this.generateRoomCode();
-                this.isHost = true; // BU SATIRI EKLE
-
-                this.socket.emit('create-room', {
-                    room: this.currentRoom,
-                    userName: this.userName
-                });
-
-                this.showStatus('🏗️ Oda oluşturuluyor...', 'success');
-                await this.startLocalStream();
-            }
-
-            async joinRoom() {
-                const nameInput = document.getElementById('joinUserName').value.trim();
-                const roomInput = document.getElementById('roomCode').value.trim().toUpperCase();
-
-                if (!nameInput || !roomInput) {
-                    this.showStatus('🚨 Kullanıcı adı ve oda kodunu girin!', 'error');
-                    return;
-                }
-
-                this.userName = nameInput;
-                this.currentRoom = roomInput;
-
-this.socket.emit('join-room', {
-    room: this.currentRoom,
-    userName: this.userName
-}, (response) => {
-    if (response && response.error) {
-        this.showStatus(`🚫 ${response.error}`, 'error');
-        return; // Hata varsa stream başlatma
-    } else {
-        this.showStatus('🚪 Odaya katılıyorsunuz...', 'success');
-        this.startLocalStream(); // Sadece burada başlat
+async createRoom() {
+    // Önceki bağlantıları temizle
+    this.cleanupConnections();
+    
+    const nameInput = document.getElementById('createUserName').value.trim();
+    if (!nameInput) {
+        this.showStatus('🚨 Kullanıcı adını girin!', 'error');
+        return;
     }
-});
 
-                
-            }
+    this.userName = nameInput;
+    this.currentRoom = this.generateRoomCode();
+    this.isHost = true;
+
+    this.socket.emit('create-room', {
+        room: this.currentRoom,
+        userName: this.userName
+    });
+
+    this.showStatus('🏗️ Oda oluşturuluyor...', 'success');
+    await this.startLocalStream();
+}
+
+async joinRoom() {
+    // Önceki bağlantıları temizle
+    this.cleanupConnections();
+    
+    const nameInput = document.getElementById('joinUserName').value.trim();
+    const roomInput = document.getElementById('roomCode').value.trim().toUpperCase();
+
+    if (!nameInput || !roomInput) {
+        this.showStatus('🚨 Kullanıcı adı ve oda kodunu girin!', 'error');
+        return;
+    }
+
+    this.userName = nameInput;
+    this.currentRoom = roomInput;
+
+    this.socket.emit('join-room', {
+        room: this.currentRoom,
+        userName: this.userName
+    }, (response) => {
+        if (response && response.error) {
+            this.showStatus(`🚫 ${response.error}`, 'error');
+            return;
+        } else {
+            this.showStatus('🚪 Odaya katılıyorsunuz...', 'success');
+            this.startLocalStream();
+        }
+    });
+}
 
             async startLocalStream() {
                 try {
