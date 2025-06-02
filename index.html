@@ -1447,6 +1447,33 @@ showVideoOverlay(videoElement, userName) {
     overlay.classList.add('active');
 }
 
+// Yeni metodlar ekle:
+updateUserList(users) {
+    users.forEach((user, index) => {
+        if (index === 0) {
+            // İlk kullanıcı (kendisi veya local)
+            document.getElementById('localUserName').textContent = user.name;
+        } else if (index === 1) {
+            // İkinci kullanıcı
+            document.getElementById('remoteUserName').textContent = user.name;
+            document.getElementById('remoteVideo').parentElement.classList.remove('hidden');
+        } else if (index === 2) {
+            // Üçüncü kullanıcı
+            document.getElementById('remoteUserName2').textContent = user.name;
+            const wrapper = document.getElementById('remoteVideo2Wrapper');
+            wrapper.classList.remove('hidden');
+            wrapper.classList.add('entering');
+        }
+        // 4. ve 5. kullanıcılar için de benzer şekilde...
+    });
+}
+
+setupMeshNetwork(otherUsers) {
+    // Her kullanıcı ile ayrı P2P bağlantısı kur
+    otherUsers.forEach(user => {
+        this.createPeerConnection(user.id, user.name);
+    });
+}
 
 hideVideoOverlay() {
     const overlay = document.getElementById('videoOverlay');
@@ -1464,6 +1491,25 @@ hideVideoOverlay() {
                         secure: true,
                         rejectUnauthorized: false
                     });
+
+                    this.socket.on('room-updated', (data) => {
+    console.log(`📊 Oda güncellendi: ${data.userCount} kişi`);
+    this.updateVideoLayout(data.userCount);
+    this.updateUserList(data.users);
+});
+
+this.socket.on('ready-for-call', (data) => {
+    console.log('🔗 P2P bağlantı hazır:', data.targetUser.name);
+    this.setupPeerConnection();
+    if (data.shouldOffer) {
+        setTimeout(() => this.createOffer(data.targetUser.id), 500);
+    }
+});
+
+this.socket.on('setup-mesh-calls', (data) => {
+    console.log('🕸️ Mesh network kuruluyor:', data.allUsers.length, 'kişi');
+    this.setupMeshNetwork(data.allUsers);
+});
 
                     this.socket.on('connect', () => {
                         this.updateConnectionStatus('connected', 'Bağlandı');
