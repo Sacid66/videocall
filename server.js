@@ -156,32 +156,30 @@ io.on('connection', (socket) => {
     });
 
     // Yardımcı fonksiyonlar
-    function leaveCurrentRoom(socket) {
-        const user = users.get(socket.id);
-        if (user && user.room) {
-            const room = user.room;
-            
-            // Odadan çık
-            socket.leave(room);
-            
-            // Oda listesinden çıkar
-            if (rooms.has(room)) {
-                rooms.get(room).delete(socket.id);
-                
-                // Oda boşsa sil
-                if (rooms.get(room).size === 0) {
-                    rooms.delete(room);
-                    console.log(`🗑️ Oda silindi: ${room}`);
-                } else {
-                    // Diğerlerine bildir
-                    broadcastRoomUpdate(room);
-                }
-            }
-            
-            // Kullanıcı kaydını temizle
-            users.delete(socket.id);
+function leaveCurrentRoom(socket) {
+    const user = users.get(socket.id);
+    if (user && user.room) {
+        const room = user.room;
+        
+        console.log(`👋 ${user.name} odadan ayrılıyor: ${room}`);
+        
+        // Odadan çık
+        socket.leave(room);
+        
+        // Oda listesinden çıkar
+        if (rooms.has(room)) {
+            rooms.get(room).delete(socket.id);
+        }
+        
+        // Kullanıcı kaydını temizle
+        users.delete(socket.id);
+        
+        // Oda durumunu güncelle (ayrıldıktan sonra)
+        if (rooms.has(room)) {
+            broadcastRoomUpdate(room);
         }
     }
+}
 
     function handleUserLeave(socket) {
         const user = users.get(socket.id);
@@ -191,55 +189,57 @@ io.on('connection', (socket) => {
         }
     }
 
-    function broadcastRoomUpdate(room) {
-        if (!rooms.has(room)) return;
-        
-        const roomUsers = Array.from(rooms.get(room))
-            .map(userId => users.get(userId))
-            .filter(Boolean);
-        
-        const userCount = roomUsers.length;
-        
-        console.log(`📊 Oda güncellemesi: ${room}, ${userCount} kişi`);
-        
-        // Tüm odaya durum gönder
-        io.to(room).emit('room-updated', {
-            userCount: userCount,
-            users: roomUsers,
-            shouldStartCalls: userCount >= 2
-        });
-        
-        // 2 kişi olduğunda P2P başlat
-        if (userCount === 2) {
-            setTimeout(() => {
-                const [user1, user2] = roomUsers;
-                
-                // Her ikisine de birbirini gönder
-                io.to(user1.id).emit('ready-for-call', {
-                    targetUser: user2,
-                    shouldOffer: user1.id < user2.id
-                });
-                
-                io.to(user2.id).emit('ready-for-call', {
-                    targetUser: user1,
-                    shouldOffer: user2.id < user1.id
-                });
-            }, 1000);
-        }
-        
-        // 3+ kişi için mesh network başlat
-        if (userCount >= 3) {
-            setTimeout(() => {
-                roomUsers.forEach(user => {
-                    const otherUsers = roomUsers.filter(u => u.id !== user.id);
-                    io.to(user.id).emit('setup-mesh-calls', {
-                        allUsers: otherUsers,
-                        myInfo: user
-                    });
-                });
-            }, 1000);
-        }
+function broadcastRoomUpdate(room) {
+    if (!rooms.has(room)) return;
+    
+    const roomUsers = Array.from(rooms.get(room))
+        .map(userId => users.get(userId))
+        .filter(Boolean);
+    
+    const userCount = roomUsers.length;
+    
+    console.log(`📊 Oda güncellemesi: ${room}, ${userCount} kişi`);
+    
+    // Tüm odaya durum gönder
+    io.to(room).emit('room-updated', {
+        userCount: userCount,
+        users: roomUsers,
+        shouldStartCalls: userCount >= 2
+    });
+    
+    // Eğer kimse kalmadıysa odayı sil
+    if (userCount === 0) {
+        rooms.delete(room);
+        console.log(`🗑️ Oda tamamen silindi: ${room}`);
+        return;
     }
+    
+    // 2 kişi olduğunda P2P başlat
+    if (userCount === 2) {
+        setTimeout(() => {
+            if (rooms.get(room)?.size !== 2) return; // Double check
+            
+            const [user1, user2] = roomUsers;
+            
+            // Her ikisine de birbirini gönder
+            io.to(user1.id).emit('ready-for-call', {
+                targetUser: user2,
+                shouldOffer: user1.id < user2.id
+            });
+            
+            io.to(user2.id).emit('ready-for-call', {
+                targetUser: user1,
+                shouldOffer: user2.id < user1.id
+            });
+        }, 1000);
+    }
+    
+    // 3+ kişi için layout güncelleme (video bağlantısı 2 kişilik kalır)
+    if (userCount >= 3) {
+        // Sadece layout güncellemesi, mesh network yok
+        console.log(`👥 ${userCount} kişilik layout aktif: ${room}`);
+    }
+}
 });
 
 // Port - Render PORT env variable kullanır
