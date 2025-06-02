@@ -1346,6 +1346,9 @@ input, textarea {
                 this.screenStream = null;
                 this.peerConnections = new Map(); // Her user için ayrı connection
                 this.remoteUserIds = []; // Remote kullanıcıları takip et
+                this.userVideoMap = new Map(); // userId -> videoElementId eşleşmesi
+                this.availableVideoSlots = ['remoteVideo', 'remoteVideo2', 'remoteVideo3', 'remoteVideo4'];
+                this.usedVideoSlots = new Set();
 
                 this.configuration = {
                     iceServers: [
@@ -1642,14 +1645,51 @@ this.socket.on('user-left', (data) => {
 });
 
 this.socket.on('peer-disconnected', (data) => {
-    console.log('🔌 Peer bağlantısı kesildi:', data.userId);
-    if (this.peerConnection) {
-        this.peerConnection.close();
-        this.peerConnection = null;
+    console.log('🔌 Peer ayrıldı:', data.userId);
+    
+    // Sadece o peer'ı temizle
+    const pc = this.peerConnections.get(data.userId);
+    if (pc) {
+        pc.close();
+        this.peerConnections.delete(data.userId);
     }
-    this.handleUserLeft();
+    
+    // Video elementini serbest bırak
+    this.releaseVideoElement(data.userId);
+    
+    // User listesinden çıkar
+    this.remoteUserIds = this.remoteUserIds.filter(id => id !== data.userId);
+    
+    // Layout'u güncelle (kalan kullanıcı sayısına göre)
+    this.updateVideoLayout(this.remoteUserIds.length + 1); // +1 kendisi için
+    
+    // Eğer hiç kimse kalmadıysa
+    if (this.remoteUserIds.length === 0) {
+        document.getElementById('videoConnectionIndicator').className = 'connection-indicator disconnected';
+        this.isConnected = false;
+        this.showStatus('😔 Tüm kullanıcılar ayrıldı', 'warning');
+    } else {
+        this.showStatus(`👋 ${data.userName || 'Kullanıcı'} ayrıldı`, 'warning');
+    }
 });
 
+
+
+this.socket.on('ready-to-call', async (data) => {
+    console.log('📞 P2P call başlatılıyor:', data);
+    
+    // Eski mantığı kullan (2 kişi için)
+    this.remoteUserId = data.userId;
+    document.getElementById('remoteUserName').textContent = data.userName;
+    
+    if (!this.peerConnection || this.peerConnection.signalingState === 'closed') {
+        await this.setupPeerConnection();
+    }
+    
+    if (data.shouldOffer) {
+        await this.createOffer();
+    }
+});
                     this.socket.on('error', (data) => {
                         this.showStatus(`🚫 Bağlantı hatası: ${data.message}`, 'error');
                         console.error('Socket.IO hatası:', data);
@@ -1900,33 +1940,52 @@ displayMessage(message) {
 
 
 assignVideoElement(userId) {
-    const remoteUsers = Array.from(this.peerConnections.keys());
-    const userIndex = remoteUsers.indexOf(userId);
-    
-    if (userIndex === 0) {
+    // Daha önce atanmışsa aynısını döndür
+    if (this.userVideoMap.has(userId)) {
+        const videoId = this.userVideoMap.get(userId);
         return {
-            element: document.getElementById('remoteVideo'),
-            label: document.getElementById('remoteUserName'),
-            wrapper: document.getElementById('remoteVideo').parentElement
-        };
-    } else if (userIndex === 1) {
-        const wrapper = document.getElementById('remoteVideo2Wrapper');
-        wrapper.classList.remove('hidden');
-        return {
-            element: document.getElementById('remoteVideo2'),
-            label: document.getElementById('remoteUserName2'),
-            wrapper: wrapper
-        };
-    } else if (userIndex === 2) {
-        const wrapper = document.getElementById('remoteVideo3Wrapper');
-        wrapper.classList.remove('hidden');
-        return {
-            element: document.getElementById('remoteVideo3'),
-            label: document.getElementById('remoteUserName3'),
-            wrapper: wrapper
+            element: document.getElementById(videoId),
+            label: document.getElementById(videoId.replace('Video', 'UserName')),
+            wrapper: document.getElementById(videoId + 'Wrapper') || document.getElementById(videoId).parentElement
         };
     }
-    return null; // 4. kullanıcıdan sonra null döner
+    
+    // Boş slot bul
+    for (const slot of this.availableVideoSlots) {
+        if (!this.usedVideoSlots.has(slot)) {
+            this.usedVideoSlots.add(slot);
+            this.userVideoMap.set(userId, slot);
+            
+            const element = document.getElementById(slot);
+            const label = document.getElementById(slot.replace('Video', 'UserName'));
+            const wrapper = document.getElementById(slot + 'Wrapper') || element.parentElement;
+            
+            if (wrapper.classList.contains('hidden')) {
+                wrapper.classList.remove('hidden');
+                wrapper.classList.add('entering');
+            }
+            
+            return { element, label, wrapper };
+        }
+    }
+    return null;
+}
+
+
+
+releaseVideoElement(userId) {
+    if (this.userVideoMap.has(userId)) {
+        const videoId = this.userVideoMap.get(userId);
+        this.usedVideoSlots.delete(videoId);
+        this.userVideoMap.delete(userId);
+        
+        // Video elementini temizle
+        const element = document.getElementById(videoId);
+        const wrapper = document.getElementById(videoId + 'Wrapper') || element.parentElement;
+        
+        if (element) element.srcObject = null;
+        if (wrapper) wrapper.classList.add('hidden');
+    }
 }
 
 async createRoom() {
@@ -2295,38 +2354,38 @@ this.peerConnection.onconnectionstatechange = () => {
             }
 
 handleUserLeft() {
-    console.log('🧹 UI temizleniyor...');
+    console.log('🧹 Temizlik başlıyor...');
     
-    // Remote video'yu temizle ve bekleniyor yaz
-    const remoteVideo = document.getElementById('remoteVideo');
-    const remoteUserName = document.getElementById('remoteUserName');
+    // Tüm peer connection'ları kapat
+    this.peerConnections.forEach((pc, userId) => {
+        pc.close();
+        this.releaseVideoElement(userId);
+    });
+    this.peerConnections.clear();
     
-    if (remoteVideo) {
-        remoteVideo.srcObject = null;
-        // Video elementini siyah yap
-        remoteVideo.style.background = 'var(--bg-secondary)';
+    // Eski single connection'ı da temizle
+    if (this.peerConnection) {
+        this.peerConnection.close();
+        this.peerConnection = null;
     }
     
-    if (remoteUserName) {
-        remoteUserName.textContent = 'Bekleniyor...';
-    }
+    // Tüm remote videoları temizle
+    this.userVideoMap.clear();
+    this.usedVideoSlots.clear();
     
-    // Connection indicator'ı güncelle
-    const indicator = document.getElementById('videoConnectionIndicator');
-    if (indicator) {
-        indicator.className = 'connection-indicator disconnected';
-    }
+    // UI sıfırla
+    ['remoteVideo', 'remoteVideo2', 'remoteVideo3', 'remoteVideo4'].forEach(id => {
+        const video = document.getElementById(id);
+        const wrapper = document.getElementById(id + 'Wrapper') || video?.parentElement;
+        if (video) video.srcObject = null;
+        if (wrapper) wrapper.classList.add('hidden');
+    });
     
-    // Durumları sıfırla
+    document.getElementById('videoConnectionIndicator').className = 'connection-indicator disconnected';
     this.isConnected = false;
-    this.remoteUserId = null;
-    this.remoteStream = null;
-    
-    // Chat'i temizle
+    this.remoteUserIds = [];
     this.clearChat();
-    
-    // Status mesajı göster
-    this.showStatus('😔 Diğer kullanıcı ayrıldı', 'error');
+    this.showStatus('😔 Bağlantı kesildi', 'error');
 }
 
             clearChat() {
