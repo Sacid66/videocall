@@ -69,7 +69,7 @@ io.on('connection', (socket) => {
     console.log(`🏠 Oda oluşturuldu: ${room}, Kullanıcı: ${userName}`);
 });
 
-   socket.on('join-room', (data, callback) => {
+socket.on('join-room', (data, callback) => {
     const { room, userName } = data;
     
     if (rooms.has(room)) {
@@ -103,35 +103,53 @@ io.on('connection', (socket) => {
         
         console.log(`👤 ${userName} odaya katıldı: ${room}`);
         
-// ready-to-call kısmını şu şekilde değiştir (mevcut setTimeout kısmını değiştir):
-if (rooms.get(room).size === 2) {
-    setTimeout(() => {
-        const users = Array.from(rooms.get(room));
-        if (users.length !== 2) return; // Güvenlik kontrolü
-        
-        const firstUser = users[0];
-        const secondUser = users[1];
-        
-        // Önce her iki kullanıcıya da peer-reset gönder
-        io.to(firstUser).emit('peer-reset');
-        io.to(secondUser).emit('peer-reset');
-        
-        // Sonra ready-to-call gönder
-        setTimeout(() => {
-            io.to(firstUser).emit('ready-to-call', { 
-                userId: secondUser,
-                userName: io.sockets.sockets.get(secondUser)?.data.userName,
-                shouldOffer: firstUser < secondUser // Deterministik karar
-            });
-            
-            io.to(secondUser).emit('ready-to-call', { 
-                userId: firstUser,
-                userName: io.sockets.sockets.get(firstUser)?.data.userName,
-                shouldOffer: secondUser < firstUser // Tersi
-            });
-        }, 500);
-    }, 2000);
-}
+        // BU KISMI DEĞİŞTİR - ESKİ ready-to-call kısmını sil, yenisini koy:
+        // 2+ kişi olduğunda bağlantı kur
+        const userCount = rooms.get(room).size;
+        if (userCount >= 2) {
+            setTimeout(() => {
+                const users = Array.from(rooms.get(room));
+                const currentUserCount = users.length;
+                
+                if (currentUserCount === 2) {
+                    // 2 kişi - normal P2P
+                    const firstUser = users[0];
+                    const secondUser = users[1];
+                    
+                    io.to(firstUser).emit('peer-reset');
+                    io.to(secondUser).emit('peer-reset');
+                    
+                    setTimeout(() => {
+                        io.to(firstUser).emit('ready-to-call', { 
+                            userId: secondUser,
+                            userName: io.sockets.sockets.get(secondUser)?.data.userName,
+                            shouldOffer: firstUser < secondUser,
+                            userCount: 2
+                        });
+                        
+                        io.to(secondUser).emit('ready-to-call', { 
+                            userId: firstUser,
+                            userName: io.sockets.sockets.get(firstUser)?.data.userName,
+                            shouldOffer: secondUser < firstUser,
+                            userCount: 2
+                        });
+                    }, 500);
+                    
+                } else if (currentUserCount >= 3) {
+                    // 3+ kişi - layout değişikliği
+                    io.to(room).emit('user-count-changed', { 
+                        userCount: currentUserCount,
+                        newUserName: userName,
+                        users: users.map(id => ({
+                            id: id,
+                            name: io.sockets.sockets.get(id)?.data.userName
+                        }))
+                    });
+                    
+                    console.log(`👥 ${currentUserCount} kişilik grup oluştu: ${room}`);
+                }
+            }, 2000);
+        }
         
         if (callback) callback({ success: true });
     } else {
