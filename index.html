@@ -1168,6 +1168,7 @@ input, textarea {
 .video-grid.layout-3 {
     grid-template-columns: 1fr 1fr 1fr;
     grid-template-rows: 1fr;
+    gap: 16px; /* 24px yerine 16px */
 }
 
 .video-grid.layout-4 {
@@ -1184,13 +1185,12 @@ input, textarea {
     grid-column: 2;
 }
 
-/* Panel expansion */
+/* CSS'te video-panel.expanded'ı şununla değiştir: */
 .video-panel.expanded {
-    max-width: 1800px;
-    width: 95%;
-    transform: scale(1.05);
+    max-width: 1600px; /* 1800px yerine 1600px */
+    width: 90%; /* 95% yerine 90% */
+    transform: scale(1.02); /* 1.05 yerine 1.02 - daha az büyüsün */
 }
-
 /* Video animations */
 .video-wrapper.hidden {
     display: none;
@@ -1447,24 +1447,32 @@ showVideoOverlay(videoElement, userName) {
     overlay.classList.add('active');
 }
 
-// Yeni metodlar ekle:
+// updateUserList metodunu şununla değiştir:
 updateUserList(users) {
+    // Önce tüm remote videoları gizle
+    document.getElementById('remoteVideo').parentElement.classList.add('hidden');
+    document.getElementById('remoteVideo2Wrapper').classList.add('hidden');
+    document.getElementById('remoteVideo3Wrapper').classList.add('hidden');
+    document.getElementById('remoteVideo4Wrapper').classList.add('hidden');
+    
     users.forEach((user, index) => {
-        if (index === 0) {
-            // İlk kullanıcı (kendisi veya local)
+        if (user.id === this.socket.id) {
+            // Kendisi - local video
             document.getElementById('localUserName').textContent = user.name;
-        } else if (index === 1) {
-            // İkinci kullanıcı
-            document.getElementById('remoteUserName').textContent = user.name;
-            document.getElementById('remoteVideo').parentElement.classList.remove('hidden');
-        } else if (index === 2) {
-            // Üçüncü kullanıcı
-            document.getElementById('remoteUserName2').textContent = user.name;
-            const wrapper = document.getElementById('remoteVideo2Wrapper');
-            wrapper.classList.remove('hidden');
-            wrapper.classList.add('entering');
+        } else {
+            // Diğer kullanıcılar - sırayla remote videolara ata
+            const remoteIndex = users.filter(u => u.id !== this.socket.id).indexOf(user);
+            
+            if (remoteIndex === 0) {
+                document.getElementById('remoteUserName').textContent = user.name;
+                document.getElementById('remoteVideo').parentElement.classList.remove('hidden');
+            } else if (remoteIndex === 1) {
+                document.getElementById('remoteUserName2').textContent = user.name;
+                const wrapper = document.getElementById('remoteVideo2Wrapper');
+                wrapper.classList.remove('hidden');
+                wrapper.classList.add('entering');
+            }
         }
-        // 4. ve 5. kullanıcılar için de benzer şekilde...
     });
 }
 
@@ -1498,8 +1506,10 @@ hideVideoOverlay() {
     this.updateUserList(data.users);
 });
 
+// ready-for-call event'ini şununla değiştir:
 this.socket.on('ready-for-call', (data) => {
     console.log('🔗 P2P bağlantı hazır:', data.targetUser.name);
+    this.remoteUserId = data.targetUser.id; // BU SATIRI EKLE
     this.setupPeerConnection();
     if (data.shouldOffer) {
         setTimeout(() => this.createOffer(data.targetUser.id), 500);
