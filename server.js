@@ -214,31 +214,45 @@ function broadcastRoomUpdate(room) {
         return;
     }
     
-    // 2 kişi olduğunda P2P başlat
-    if (userCount === 2) {
-        setTimeout(() => {
-            if (rooms.get(room)?.size !== 2) return; // Double check
-            
+// 2+ kişi için MESH network kur
+if (userCount >= 2) {
+    setTimeout(() => {
+        console.log(`🕸️ ${userCount} kişi için mesh network kuruluyor...`);
+        
+        // 2 kişi için özel P2P logic
+        if (userCount === 2) {
             const [user1, user2] = roomUsers;
             
-            // Her ikisine de birbirini gönder
-            io.to(user1.id).emit('ready-for-call', {
-                targetUser: user2,
-                shouldOffer: user1.id < user2.id
+            console.log(`🔗 P2P kuruluyor: ${user1.name} ↔ ${user2.name}`);
+            
+            // İlk kullanıcıya offer yapmasını söyle
+            io.to(user1.id).emit('ready-to-call', {
+                userId: user2.id,
+                userName: user2.name,
+                shouldOffer: true
             });
             
-            io.to(user2.id).emit('ready-for-call', {
-                targetUser: user1,
-                shouldOffer: user2.id < user1.id
+            // İkinci kullanıcıya beklemesini söyle
+            io.to(user2.id).emit('ready-to-call', {
+                userId: user1.id,
+                userName: user1.name,
+                shouldOffer: false
             });
-        }, 1000);
-    }
-    
-    // 3+ kişi için layout güncelleme (video bağlantısı 2 kişilik kalır)
-    if (userCount >= 3) {
-        // Sadece layout güncellemesi, mesh network yok
-        console.log(`👥 ${userCount} kişilik layout aktif: ${room}`);
-    }
+        } else {
+            // 3+ kişi için mesh network
+            roomUsers.forEach(user => {
+                const otherUsers = roomUsers.filter(u => u.id !== user.id);
+                
+                console.log(`👤 ${user.name} için ${otherUsers.length} bağlantı kuruluyor`);
+                
+                io.to(user.id).emit('setup-peer-connections', {
+                    allUsers: otherUsers,
+                    myInfo: user
+                });
+            });
+        }
+    }, 1000);
+}
 }
 });
 
