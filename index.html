@@ -1952,31 +1952,12 @@ async createRoom() {
     await this.startLocalStream();
 }
 
-async createPeerConnectionForUser(user) {
-    // Her kullanıcı için ayrı peer connection oluştur
-    const peerConnection = new RTCPeerConnection(this.configuration);
-    this.peerConnections.set(user.id, peerConnection);
-    
-    // Stream'i ekle
-    this.localStream.getTracks().forEach(track => {
-        peerConnection.addTrack(track, this.localStream);
-    });
-    
-    // Events'leri ayarla
-    this.setupPeerEvents(peerConnection, user);
-    
-    // Offer/answer logic
-    if (this.socket.id < user.id) {
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        this.socket.emit('offer', { to: user.id, offer: offer });
-    }
-}
+
 
 async shareScreen() {
     try {
         if (this.isScreenSharing) {
-            // Ekran paylaşımını durdur
+            // Ekran paylaşımını durdura
             await this.stopScreenShare();
             return;
         }
