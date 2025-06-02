@@ -1344,6 +1344,7 @@ input, textarea {
                 this.isJoinMode = false;
                 this.isScreenSharing = false;
                 this.screenStream = null;
+                this.peerConnections = new Map(); // Her user için ayrı connection
 
                 this.configuration = {
                     iceServers: [
@@ -1515,13 +1516,18 @@ hideVideoOverlay() {
 
     // YUKARIDAKİLERİN YERİNE BUNU EKLE:
     this.socket.on('setup-peer-connections', (data) => {
-        console.log(`🔗 ${data.allUsers.length} kişi ile bağlantı kuruluyor...`);
-        
-        data.allUsers.forEach(user => {
-            console.log(`📞 ${user.name} ile bağlantı kuruluyor...`);
-            this.createPeerConnectionForUser(user);
-        });
+    console.log(`🔗 ${data.allUsers.length} kişi ile bağlantı kuruluyor...`);
+    
+    data.allUsers.forEach(async (user) => {
+        console.log(`📞 ${user.name} ile bağlantı kuruluyor...`);
+        await this.createPeerConnectionForUser(user);
     });
+});
+
+
+
+
+
 
 this.socket.on('peer-reset', () => {
     console.log('🔄 Peer connection sıfırlanıyor...');
@@ -1836,6 +1842,27 @@ async createRoom() {
 
     this.showStatus('🏗️ Oda oluşturuluyor...', 'success');
     await this.startLocalStream();
+}
+
+async createPeerConnectionForUser(user) {
+    // Her kullanıcı için ayrı peer connection oluştur
+    const peerConnection = new RTCPeerConnection(this.configuration);
+    this.peerConnections.set(user.id, peerConnection);
+    
+    // Stream'i ekle
+    this.localStream.getTracks().forEach(track => {
+        peerConnection.addTrack(track, this.localStream);
+    });
+    
+    // Events'leri ayarla
+    this.setupPeerEvents(peerConnection, user);
+    
+    // Offer/answer logic
+    if (this.socket.id < user.id) {
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        this.socket.emit('offer', { to: user.id, offer: offer });
+    }
 }
 
 async shareScreen() {
