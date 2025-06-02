@@ -1552,13 +1552,13 @@ this.socket.on('peer-reset', () => {
                         }
                     });
 
-// ready-to-call event'ini şu şekilde değiştir:
 this.socket.on('ready-to-call', async (data) => {
-    console.log('Ready to call event alındı:', data);
+    console.log('📞 Ready to call event alındı:', data);
     
     this.remoteUserId = data.userId;
     document.getElementById('remoteUserName').textContent = data.userName;
 
+    // Stream hazır değilse bekle
     if (!this.isStreamReady) {
         setTimeout(() => {
             if (this.isStreamReady) {
@@ -1574,7 +1574,7 @@ this.socket.on('ready-to-call', async (data) => {
     // Sunucudan gelen karara göre offer yap
     if (data.shouldOffer) {
         console.log('🎯 Bu kullanıcı offer yapacak');
-        setTimeout(() => this.createOffer(), 1000);
+        setTimeout(() => this.createOffer(), 500);
     } else {
         console.log('⏳ Bu kullanıcı offer bekleyecek');
     }
