@@ -1506,32 +1506,22 @@ hideVideoOverlay() {
     this.updateUserList(data.users);
 });
 
-// ready-for-call event'ini şununla değiştir:
-this.socket.on('ready-for-call', (data) => {
-    console.log('🔗 P2P bağlantı hazır:', data.targetUser.name);
-    this.remoteUserId = data.targetUser.id; // BU SATIRI EKLE
-    this.setupPeerConnection();
-    if (data.shouldOffer) {
-        setTimeout(() => this.createOffer(data.targetUser.id), 500);
-    }
-});
 
-this.socket.on('setup-mesh-calls', (data) => {
-    console.log('🕸️ Mesh network kuruluyor:', data.allUsers.length, 'kişi');
-    this.setupMeshNetwork(data.allUsers);
-});
 
-                    this.socket.on('connect', () => {
-                        this.updateConnectionStatus('connected', 'Bağlandı');
-                    });
+ this.socket.on('setup-mesh-calls', (data) => {
+        console.log('🕸️ Mesh network kuruluyor:', data.allUsers.length, 'kişi');
+        this.setupMeshNetwork(data.allUsers);
+    });
 
-                    this.socket.on('disconnect', () => {
-                        this.updateConnectionStatus('disconnected', 'Bağlantı kesildi');
-                        if (this.peerConnection) {
-                            this.peerConnection.close();
-                            this.peerConnection = null;
-                        }
-                    });
+    // YUKARIDAKİLERİN YERİNE BUNU EKLE:
+    this.socket.on('setup-peer-connections', (data) => {
+        console.log(`🔗 ${data.allUsers.length} kişi ile bağlantı kuruluyor...`);
+        
+        data.allUsers.forEach(user => {
+            console.log(`📞 ${user.name} ile bağlantı kuruluyor...`);
+            this.createPeerConnectionForUser(user);
+        });
+    });
 
 this.socket.on('peer-reset', () => {
     console.log('🔄 Peer connection sıfırlanıyor...');
