@@ -1406,16 +1406,31 @@ updateVideoLayout(userCount) {
     } else {
         videoPanel.classList.remove('expanded');
     }
+
+
 }
 
-
-// 3. kişi ekle
 addThirdUser() {
     const wrapper = document.getElementById('remoteVideo2Wrapper');
     wrapper.classList.remove('hidden');
     wrapper.classList.add('entering');
     this.updateVideoLayout(3);
+
+
+    this.socket.on('user-count-changed', (data) => {
+    console.log(`👥 ${data.userCount} kişi odada!`);
+    this.updateVideoLayout(data.userCount);
+    
+    if (data.userCount === 3) {
+        this.addThirdUser(data.newUserName);
+    }
+});
+
+
+    
 }
+
+
 
 showVideoOverlay(videoElement, userName) {
     const overlay = document.getElementById('videoOverlay');
@@ -1932,6 +1947,7 @@ async startLocalStream() {
         document.getElementById('localVideo').srcObject = this.localStream;
         document.getElementById('localUserName').textContent = this.userName;
         this.showVideoScreen();
+        this.updateVideoLayout(2); // BU SATIRI EKLE
         this.showStatus('🎥 Kamera açıldı!', 'success');
         this.isStreamReady = true;
         
