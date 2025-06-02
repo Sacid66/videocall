@@ -184,13 +184,21 @@ io.on('connection', (socket) => {
        }
    }
 
-   function handleUserLeave(socket) {
-       const user = users.get(socket.id);
-       if (user) {
-           console.log(`👋 ${user.name} ayrıldı: ${user.room}`);
-           leaveCurrentRoom(socket);
-       }
-   }
+function handleUserLeave(socket) {
+    const user = users.get(socket.id);
+    if (user) {
+        const room = user.room;
+        console.log(`👋 ${user.name} ayrıldı: ${room}`);
+        
+        // Diğer kullanıcılara bildir
+        socket.to(room).emit('peer-disconnected', {
+            userId: socket.id,
+            userName: user.name
+        });
+        
+        leaveCurrentRoom(socket);
+    }
+}
 
    function broadcastRoomUpdate(room) {
        if (!rooms.has(room)) return;
