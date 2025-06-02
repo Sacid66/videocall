@@ -1157,6 +1157,55 @@ input, textarea {
 }
 
 
+
+
+/* Multi-layout sistemini ekle */
+.video-grid.layout-2 {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr;
+}
+
+.video-grid.layout-3 {
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr;
+}
+
+.video-grid.layout-4 {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+}
+
+.video-grid.layout-5 {
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+}
+
+.video-grid.layout-5 .video-wrapper:last-child {
+    grid-column: 2;
+}
+
+/* Panel expansion */
+.video-panel.expanded {
+    max-width: 1800px;
+    width: 95%;
+    transform: scale(1.05);
+}
+
+/* Video animations */
+.video-wrapper.hidden {
+    display: none;
+}
+
+.video-wrapper.entering {
+    animation: videoEnter 0.8s ease forwards;
+}
+
+@keyframes videoEnter {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+
     </style>
 </head>
 <body>
@@ -1211,16 +1260,33 @@ input, textarea {
         <span id="roomInfo">Oda: -- | Kullanıcı: --</span>
     </div>
     
-    <div class="video-grid">
-        <div class="video-wrapper">
-            <video class="video-element" id="localVideo" autoplay muted playsinline></video>
-            <div class="video-label" id="localUserName">Siz</div>
-        </div>
-        <div class="video-wrapper">
-            <video class="video-element" id="remoteVideo" autoplay playsinline></video>
-            <div class="video-label" id="remoteUserName">Bekleniyor...</div>
-        </div>
+<div class="video-grid" id="videoGrid">
+    <!-- Mevcut 2 video -->
+    <div class="video-wrapper" data-user="local">
+        <video class="video-element" id="localVideo" autoplay muted playsinline></video>
+        <div class="video-label" id="localUserName">Siz</div>
     </div>
+    <div class="video-wrapper" data-user="remote-1">
+        <video class="video-element" id="remoteVideo" autoplay playsinline></video>
+        <div class="video-label" id="remoteUserName">Bekleniyor...</div>
+    </div>
+    
+    <!-- BUNLARI EKLE -->
+    <div class="video-wrapper hidden" data-user="remote-2" id="remoteVideo2Wrapper">
+        <video class="video-element" id="remoteVideo2" autoplay playsinline></video>
+        <div class="video-label" id="remoteUserName2">Kullanıcı 3</div>
+    </div>
+    
+    <div class="video-wrapper hidden" data-user="remote-3" id="remoteVideo3Wrapper">
+        <video class="video-element" id="remoteVideo3" autoplay playsinline></video>
+        <div class="video-label" id="remoteUserName3">Kullanıcı 4</div>
+    </div>
+    
+    <div class="video-wrapper hidden" data-user="remote-4" id="remoteVideo4Wrapper">
+        <video class="video-element" id="remoteVideo4" autoplay playsinline></video>
+        <div class="video-label" id="remoteUserName4">Kullanıcı 5</div>
+    </div>
+</div>
         
         <div class="controls">
     <button class="control-btn mic-btn" id="micBtn" title="Mikrofon"><i class="fas fa-microphone"></i></button>
@@ -1325,6 +1391,30 @@ cleanupConnections() {
     this.isConnected = false;
     this.remoteUserId = null;
     this.remoteStream = null;
+}
+
+updateVideoLayout(userCount) {
+    const videoGrid = document.getElementById('videoGrid');
+    const videoPanel = document.querySelector('.video-panel');
+    
+    // Layout'u güncelle
+    videoGrid.className = 'video-grid layout-' + userCount;
+    
+    // 3+ kişi için expand
+    if (userCount >= 3) {
+        videoPanel.classList.add('expanded');
+    } else {
+        videoPanel.classList.remove('expanded');
+    }
+}
+
+
+// 3. kişi ekle
+addThirdUser() {
+    const wrapper = document.getElementById('remoteVideo2Wrapper');
+    wrapper.classList.remove('hidden');
+    wrapper.classList.add('entering');
+    this.updateVideoLayout(3);
 }
 
 showVideoOverlay(videoElement, userName) {
