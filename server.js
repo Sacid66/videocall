@@ -184,21 +184,21 @@ io.on('connection', (socket) => {
        }
    }
 
-function handleUserLeave(socket) {
-    const user = users.get(socket.id);
-    if (user) {
-        const room = user.room;
-        console.log(`👋 ${user.name} ayrıldı: ${room}`);
-        
-        // Diğer kullanıcılara bildir
-        socket.to(room).emit('peer-disconnected', {
-            userId: socket.id,
-            userName: user.name
-        });
-        
-        leaveCurrentRoom(socket);
-    }
-}
+   function handleUserLeave(socket) {
+       const user = users.get(socket.id);
+       if (user) {
+           const room = user.room;
+           console.log(`👋 ${user.name} ayrıldı: ${room}`);
+           
+           // Diğer kullanıcılara bildir
+           socket.to(room).emit('peer-disconnected', {
+               userId: socket.id,
+               userName: user.name
+           });
+           
+           leaveCurrentRoom(socket);
+       }
+   }
 
    function broadcastRoomUpdate(room) {
        if (!rooms.has(room)) return;
@@ -230,38 +230,17 @@ function handleUserLeave(socket) {
            setTimeout(() => {
                console.log(`🕸️ ${userCount} kişi için mesh network kuruluyor...`);
                
-               // 2 kişi için özel P2P logic
-               if (userCount === 2) {
-                   const [user1, user2] = roomUsers;
+               // HER DURUMDA mesh network kullan (2 kişi de olsa 5 kişi de olsa)
+               roomUsers.forEach(user => {
+                   const otherUsers = roomUsers.filter(u => u.id !== user.id);
                    
-                   console.log(`🔗 P2P kuruluyor: ${user1.name} ↔ ${user2.name}`);
+                   console.log(`👤 ${user.name} için ${otherUsers.length} bağlantı kuruluyor`);
                    
-                   // İlk kullanıcıya offer yapmasını söyle
-                   io.to(user1.id).emit('ready-to-call', {
-                       userId: user2.id,
-                       userName: user2.name,
-                       shouldOffer: true
+                   io.to(user.id).emit('setup-peer-connections', {
+                       allUsers: otherUsers,
+                       myInfo: user
                    });
-                   
-                   // İkinci kullanıcıya beklemesini söyle
-                   io.to(user2.id).emit('ready-to-call', {
-                       userId: user1.id,
-                       userName: user1.name,
-                       shouldOffer: false
-                   });
-               } else {
-                   // 3+ kişi için mesh network
-                   roomUsers.forEach(user => {
-                       const otherUsers = roomUsers.filter(u => u.id !== user.id);
-                       
-                       console.log(`👤 ${user.name} için ${otherUsers.length} bağlantı kuruluyor`);
-                       
-                       io.to(user.id).emit('setup-peer-connections', {
-                           allUsers: otherUsers,
-                           myInfo: user
-                       });
-                   });
-               }
+               });
            }, 1000);
        }
    }
