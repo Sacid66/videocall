@@ -75,37 +75,43 @@ io.on('connection', (socket) => {
        broadcastRoomUpdate(room);
    });
 
-   socket.on('join-room', (data, callback) => {
-       const { room, userName } = data;
-       
-       if (!rooms.has(room)) {
-           if (callback) callback({ error: 'Oda bulunamadı!' });
-           socket.emit('error', { message: 'Oda bulunamadı!' });
-           return;
-       }
-       
-       // Önceki odadan çık
-       leaveCurrentRoom(socket);
-       
-       // Yeni odaya katıl
-       socket.join(room);
-       
-       // Kullanıcı bilgilerini kaydet
-       users.set(socket.id, {
-           id: socket.id,
-           name: userName,
-           room: room
-       });
-       
-       rooms.get(room).add(socket.id);
-       
-       console.log(`👤 ${userName} odaya katıldı: ${room}`);
-       
-       // Oda durumunu güncelle
-       broadcastRoomUpdate(room);
-       
-       if (callback) callback({ success: true });
-   });
+socket.on('join-room', (data, callback) => {
+    const { room, userName } = data;
+    
+    if (!rooms.has(room)) {
+        if (callback) callback({ error: 'Oda bulunamadı!' });
+        socket.emit('error', { message: 'Oda bulunamadı!' });
+        return;
+    }
+    
+    // Önceki odadan çık
+    leaveCurrentRoom(socket);
+    
+    // Yeni odaya katıl
+    socket.join(room);
+    
+    // Kullanıcı bilgilerini kaydet
+    users.set(socket.id, {
+        id: socket.id,
+        name: userName,
+        room: room
+    });
+    
+    rooms.get(room).add(socket.id);
+    
+    console.log(`👤 ${userName} odaya katıldı: ${room}`);
+    
+    // Diğer kullanıcılara yeni kullanıcı katıldığını bildir
+    socket.to(room).emit('user-joined', {
+        userId: socket.id,
+        userName: userName
+    });
+    
+    // Oda durumunu güncelle
+    broadcastRoomUpdate(room);
+    
+    if (callback) callback({ success: true });
+});
 
    // WebRTC signaling
    socket.on('offer', (data) => {
@@ -130,6 +136,30 @@ io.on('connection', (socket) => {
            from: socket.id
        });
    });
+
+   // Stream hazır olduğunda peer bağlantılarını kur
+socket.on('stream-ready', (data) => {
+    const { room, userId, userName } = data;
+    console.log(`🎥 ${userName} stream'i hazır`);
+    
+    if (!rooms.has(room)) return;
+    
+    const roomUsers = Array.from(rooms.get(room))
+        .map(id => users.get(id))
+        .filter(Boolean);
+    
+    // Bu kullanıcıya diğer tüm kullanıcıları gönder
+    const otherUsers = roomUsers.filter(u => u.id !== userId);
+    
+    if (otherUsers.length > 0) {
+        setTimeout(() => {
+            io.to(userId).emit('setup-peer-connections', {
+                allUsers: otherUsers,
+                myInfo: users.get(userId)
+            });
+        }, 500);
+    }
+});
 
    // Chat
    socket.on('chat-message', (data) => {
@@ -184,21 +214,43 @@ io.on('connection', (socket) => {
        }
    }
 
-   function handleUserLeave(socket) {
-       const user = users.get(socket.id);
-       if (user) {
-           const room = user.room;
-           console.log(`👋 ${user.name} ayrıldı: ${room}`);
-           
-           // Diğer kullanıcılara bildir
-           socket.to(room).emit('peer-disconnected', {
-               userId: socket.id,
-               userName: user.name
-           });
-           
-           leaveCurrentRoom(socket);
-       }
-   }
+function handleUserLeave(socket) {
+    const user = users.get(socket.id);
+    if (user) {
+        const room = user.room;
+        console.log(`👋 ${user.name} ayrıldı: ${room}`);
+        
+        // Diğer kullanıcılara bildir
+        socket.to(room).emit('peer-disconnected', {
+            userId: socket.id,
+            userName: user.name
+        });
+        
+        // Odadan çık
+        leaveCurrentRoom(socket);
+        
+        // Kalan kullanıcılar varsa onlara güncel listeyi gönder
+        if (rooms.has(room) && rooms.get(room).size > 0) {
+            setTimeout(() => {
+                const remainingUsers = Array.from(rooms.get(room))
+                    .map(id => users.get(id))
+                    .filter(Boolean);
+                
+                // Kalan kullanıcılara birbirleriyle bağlantı kurması için bilgi gönder
+                remainingUsers.forEach(remainingUser => {
+                    const otherUsers = remainingUsers.filter(u => u.id !== remainingUser.id);
+                    
+                    if (otherUsers.length > 0) {
+                        io.to(remainingUser.id).emit('setup-peer-connections', {
+                            allUsers: otherUsers,
+                            myInfo: remainingUser
+                        });
+                    }
+                });
+            }, 1000);
+        }
+    }
+}
 
 function broadcastRoomUpdate(room) {
     if (!rooms.has(room)) return;
@@ -214,8 +266,7 @@ function broadcastRoomUpdate(room) {
     // Tüm odaya durum gönder
     io.to(room).emit('room-updated', {
         userCount: userCount,
-        users: roomUsers,
-        shouldStartCalls: userCount === 2 // Sadece 2 kişi olduğunda
+        users: roomUsers
     });
     
     // Eğer kimse kalmadıysa odayı sil
@@ -225,20 +276,22 @@ function broadcastRoomUpdate(room) {
         return;
     }
     
-    // Sadece 2 kişi olduğunda peer setup başlat
-    if (userCount === 2) {
+    // 2 veya daha fazla kişi olduğunda peer setup başlat
+    if (userCount >= 2) {
         setTimeout(() => {
-            console.log(`🔗 2 kişi için bağlantı kuruluyor...`);
+            console.log(`🔗 ${userCount} kişi için bağlantı kuruluyor...`);
             
             roomUsers.forEach(user => {
                 const otherUsers = roomUsers.filter(u => u.id !== user.id);
                 
-                io.to(user.id).emit('setup-peer-connections', {
-                    allUsers: otherUsers,
-                    myInfo: user
-                });
+                if (otherUsers.length > 0) {
+                    io.to(user.id).emit('setup-peer-connections', {
+                        allUsers: otherUsers,
+                        myInfo: user
+                    });
+                }
             });
-        }, 1500); // Biraz daha uzun bekle
+        }, 1000);
     }
 }
 
