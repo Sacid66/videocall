@@ -137,7 +137,7 @@ socket.on('join-room', (data, callback) => {
        });
    });
 
-   // Stream hazır olduğunda peer bağlantılarını kur
+// Stream hazır olduğunda peer bağlantılarını kur
 socket.on('stream-ready', (data) => {
     const { room, userId, userName } = data;
     console.log(`🎥 ${userName} stream'i hazır`);
@@ -148,16 +148,14 @@ socket.on('stream-ready', (data) => {
         .map(id => users.get(id))
         .filter(Boolean);
     
-    // Bu kullanıcıya diğer tüm kullanıcıları gönder
+    // SADECE mevcut kullanıcıları gönder, setup-peer-connections gönderme
     const otherUsers = roomUsers.filter(u => u.id !== userId);
     
     if (otherUsers.length > 0) {
-        setTimeout(() => {
-            io.to(userId).emit('setup-peer-connections', {
-                allUsers: otherUsers,
-                myInfo: users.get(userId)
-            });
-        }, 500);
+        console.log(`📤 ${userName} için ${otherUsers.length} mevcut kullanıcı gönderiliyor`);
+        io.to(userId).emit('existing-users', {
+            users: otherUsers
+        });
     }
 });
 
