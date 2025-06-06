@@ -1894,20 +1894,7 @@ peerConnection.ontrack = (event) => {
     };
     
     // Connection state'i takip et
-// Connection state'i takip et
-peerConnection.onconnectionstatechange = () => {
-    console.log(`🔗 ${user.name} bağlantı durumu: ${peerConnection.connectionState}`);
-    if (peerConnection.connectionState === 'connected') {
-        this.isConnected = true;
-        document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
-        this.showStatus(`✅ ${user.name} ile bağlantı kuruldu!`, 'success');
-    } else if (peerConnection.connectionState === 'failed') {
-        console.error(`❌ ${user.name} bağlantı başarısız!`);
-        this.showStatus(`❌ ${user.name} ile bağlantı kurulamadı!`, 'error');
-    } else if (peerConnection.connectionState === 'disconnected') {
-        console.warn(`⚠️ ${user.name} bağlantısı koptu`);
-    }
-};
+
 
 // ICE connection state'i de takip et
 peerConnection.oniceconnectionstatechange = () => {
