@@ -1495,7 +1495,7 @@ this.socket.on('setup-peer-connections', (data) => {
     if (!this.isStreamReady) {
         console.log('⏳ Stream henüz hazır değil, bekleniyor...');
         setTimeout(() => {
-            this.socket.emit('setup-peer-connections', data);
+            this.socket.on('setup-peer-connections', data);
         }, 1000);
         return;
     }
@@ -1510,21 +1510,33 @@ this.socket.on('setup-peer-connections', (data) => {
                 return;
             }
             
-            this.createPeerForUser(user);
+            // DELAY ekle
+            setTimeout(() => {
+                this.createPeerForUser(user);
+            }, 500 * (this.peerConnections.size + 1));
         }
     });
 });
 
-// BURAYA EKLE 👇
 this.socket.on('existing-users', (data) => {
     console.log('📋 Mevcut kullanıcılar alındı:', data.users.length);
     
-    data.users.forEach(user => {
+    // Stream hazır değilse bekle
+    if (!this.isStreamReady) {
+        console.log('⏳ Stream henüz hazır değil, existing users bekletiliyor...');
+        setTimeout(() => {
+            this.socket.emit('get-existing-users', { room: this.currentRoom });
+        }, 1000);
+        return;
+    }
+    
+    data.users.forEach((user, index) => {
         if (user.id !== this.socket.id && !this.peerConnections.has(user.id)) {
             console.log(`🤝 Mevcut kullanıcı ile bağlantı kuruluyor: ${user.name}`);
+            // Her kullanıcı için farklı delay
             setTimeout(() => {
                 this.createPeerForUser(user);
-            }, 500);
+            }, 800 + (index * 400));
         }
     });
 });
@@ -1797,21 +1809,36 @@ async createPeerForUser(user) {
     };
     
     // Offer oluştur (sadece küçük ID)
-    if (this.socket.id < user.id) {
-        try {
-            console.log(`📤 ${user.name} için offer oluşturuluyor...`);
-            const offer = await peerConnection.createOffer();
-            await peerConnection.setLocalDescription(offer);
-            
-            this.socket.emit('offer', { 
-                to: user.id, 
-                offer: offer,
-                fromName: this.userName
-            });
-        } catch (error) {
-            console.error(`❌ Offer oluşturma hatası:`, error);
+// Offer oluştur - delay ile ve daha güvenilir
+setTimeout(async () => {
+    try {
+        console.log(`📤 ${user.name} için offer oluşturuluyor...`);
+        
+        // Connection state kontrol et
+        if (peerConnection.connectionState === 'closed') {
+            console.log('❌ Connection zaten kapalı, offer gönderilmiyor');
+            return;
         }
+        
+        const offer = await peerConnection.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true
+        });
+        
+        await peerConnection.setLocalDescription(offer);
+        
+        this.socket.emit('offer', { 
+            to: user.id, 
+            offer: offer,
+            fromName: this.userName
+        });
+        
+        console.log(`✅ Offer gönderildi: ${user.name}`);
+        
+    } catch (error) {
+        console.error(`❌ Offer oluşturma hatası:`, error);
     }
+}, 1000);
 }
 
 assignVideoElement(userId) {
@@ -2174,6 +2201,7 @@ async startLocalStream() {
         console.log('✅ Local stream başarıyla başlatıldı');
         
 // Stream hazır olduğunu BİLDİR ve peer connection'ları BAŞLAT
+// Stream hazır olduğunu BİLDİR ve peer connection'ları BAŞLAT
 setTimeout(() => {
     if (this.socket && this.currentRoom) {
         console.log('🎥 Stream hazır, server\'a bildirilliyor...');
@@ -2183,12 +2211,14 @@ setTimeout(() => {
             userName: this.userName
         });
         
-        // MEVCUT KULLANICILARI İSTE
-        this.socket.emit('get-existing-users', {
-            room: this.currentRoom
-        });
+        // MEVCUT KULLANICILARI İSTE - daha geç
+        setTimeout(() => {
+            this.socket.emit('get-existing-users', {
+                room: this.currentRoom
+            });
+        }, 1500);
     }
-}, 1000);
+}, 500);
         
     } catch (error) {
         console.error('❌ Medya erişim hatası:', error);
