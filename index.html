@@ -1346,6 +1346,7 @@ input, textarea {
             this.userVideoMap = new Map();
             this.availableVideoSlots = ['remoteVideo', 'remoteVideo2', 'remoteVideo3', 'remoteVideo4'];
             this.usedVideoSlots = new Set();
+            this.pendingIceCandidates = new Map();
 
             this.configuration = {
                 iceServers: [
@@ -1490,16 +1491,17 @@ updateVideoLayout(userCount) {
 this.socket.on('setup-peer-connections', (data) => {
     console.log(`🔗 ${data.allUsers.length} kişi ile bağlantı kuruluyor...`);
     
-    data.allUsers.forEach(async (user) => {
-        if (user.id !== this.socket.id) {  // Kendini hariç tut
-            console.log(`📞 ${user.name} ile bağlantı kuruluyor...`);
-            
-            if (!this.remoteUserIds.includes(user.id)) {
-                this.remoteUserIds.push(user.id);
-            }
-            
-            await this.createPeerForUser(user);
+    data.allUsers.forEach(user => {
+        console.log(`📞 ${user.name} ile bağlantı kuruluyor...`);
+        
+        // Eğer zaten connection varsa ve açıksa skip et
+        const existingPc = this.peerConnections.get(user.id);
+        if (existingPc && existingPc.connectionState !== 'closed' && existingPc.connectionState !== 'failed') {
+            console.log('✅ Zaten aktif connection var:', user.id);
+            return;
         }
+        
+        this.createPeerForUser(user);
     });
 });
 
@@ -1516,70 +1518,53 @@ this.socket.on('setup-peer-connections', (data) => {
 
 
 this.socket.on('offer', async (data) => {
-    console.log('📞 Offer geldi:', data.from, data.fromName);
+    const { offer, from, fromName } = data;
+    console.log('📞 Offer geldi:', from, fromName);
     
-    // Eğer bu kullanıcı için zaten connection varsa skip et
-    if (this.peerConnections.has(data.from)) {
-        console.log('Bu kullanıcı için zaten connection var:', data.from);
-        return;
-    }
+    let pc = this.peerConnections.get(from);
     
-    const peerConnection = new RTCPeerConnection(this.configuration);
-    this.peerConnections.set(data.from, peerConnection);
-    
-    // Local stream'i ekle
-    if (this.localStream) {
-        this.localStream.getTracks().forEach(track => {
-            peerConnection.addTrack(track, this.localStream);
+    // Eğer connection yoksa veya kapalıysa yeni oluştur
+    if (!pc || pc.connectionState === 'closed') {
+        console.log('🔗 Yeni peer connection oluşturuluyor:', from);
+        await this.createPeerForUser({
+            id: from,
+            name: fromName
         });
+        pc = this.peerConnections.get(from);
     }
     
-    // Video element'i assign et
-    const videoInfo = this.assignVideoElement(data.from);
-    
-    peerConnection.ontrack = (event) => {
-        console.log('🎥 Stream alındı:', data.fromName);
-        if (videoInfo && videoInfo.element && event.streams[0]) {
-            videoInfo.element.srcObject = event.streams[0];
-            videoInfo.label.textContent = data.fromName || 'Kullanıcı';
-        }
-        
-        // User ID'yi listeye ekle
-        if (!this.remoteUserIds.includes(data.from)) {
-            this.remoteUserIds.push(data.from);
-            this.updateVideoLayout(this.remoteUserIds.length + 1);
-        }
-    };
-    
-    peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-            this.socket.emit('ice-candidate', {
-                to: data.from,
-                candidate: event.candidate
+    if (pc && pc.signalingState !== 'closed') {
+        try {
+            await pc.setRemoteDescription(offer);
+            
+            // Bekleyen ICE candidate'ları ekle
+            if (this.pendingIceCandidates && this.pendingIceCandidates.has(from)) {
+                const candidates = this.pendingIceCandidates.get(from);
+                console.log(`🧊 ${candidates.length} bekleyen ICE candidate ekleniyor:`, from);
+                
+                for (const candidate of candidates) {
+                    try {
+                        await pc.addIceCandidate(candidate);
+                    } catch (error) {
+                        console.error('❌ Bekleyen ICE candidate hatası:', error);
+                    }
+                }
+                
+                this.pendingIceCandidates.delete(from);
+            }
+            
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            
+            this.socket.emit('answer', {
+                answer: answer,
+                to: from
             });
+            
+            console.log('✅ Answer gönderildi:', from);
+        } catch (error) {
+            console.error('❌ Offer handling hatası:', error);
         }
-    };
-    
-    peerConnection.onconnectionstatechange = () => {
-        console.log(`Connection state ${data.from}:`, peerConnection.connectionState);
-        if (peerConnection.connectionState === 'connected') {
-            this.isConnected = true;
-            document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
-        }
-    };
-    
-    try {
-        await peerConnection.setRemoteDescription(data.offer);
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        
-        this.socket.emit('answer', {
-            to: data.from,
-            answer: answer,
-            fromName: this.userName
-        });
-    } catch (error) {
-        console.error('Offer işleme hatası:', error);
     }
 });
 
@@ -1590,12 +1575,26 @@ this.socket.on('offer', async (data) => {
                     }
                 });
 
-                this.socket.on('ice-candidate', async (data) => {
-                    const peerConnection = this.peerConnections.get(data.from);
-                    if (peerConnection) {
-                        await peerConnection.addIceCandidate(data.candidate);
-                    }
-                });
+this.socket.on('ice-candidate', async (data) => {
+    const { candidate, from } = data;
+    const pc = this.peerConnections.get(from);
+    
+    if (pc && pc.remoteDescription) {
+        pc.addIceCandidate(candidate).catch(error => {
+            console.error('❌ ICE candidate ekleme hatası:', error);
+        });
+    } else {
+        console.log('⏳ ICE candidate bekletiliyor (remote description yok):', from);
+        // ICE candidate'ları beklet
+        if (!this.pendingIceCandidates) {
+            this.pendingIceCandidates = new Map();
+        }
+        if (!this.pendingIceCandidates.has(from)) {
+            this.pendingIceCandidates.set(from, []);
+        }
+        this.pendingIceCandidates.get(from).push(candidate);
+    }
+});
 
                 this.socket.on('user-joined', (data) => {
     console.log('👋 Yeni kullanıcı katıldı:', data.userName);
