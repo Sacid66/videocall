@@ -1272,20 +1272,20 @@ input, textarea {
     </div>
     
     <!-- BUNLARI EKLE -->
-    <div class="video-wrapper hidden" data-user="remote-2" id="remoteVideo2Wrapper">
-        <video class="video-element" id="remoteVideo2" autoplay playsinline></video>
-        <div class="video-label" id="remoteUserName2">Kullanıcı 3</div>
-    </div>
-    
-    <div class="video-wrapper hidden" data-user="remote-3" id="remoteVideo3Wrapper">
-        <video class="video-element" id="remoteVideo3" autoplay playsinline></video>
-        <div class="video-label" id="remoteUserName3">Kullanıcı 4</div>
-    </div>
-    
-    <div class="video-wrapper hidden" data-user="remote-4" id="remoteVideo4Wrapper">
-        <video class="video-element" id="remoteVideo4" autoplay playsinline></video>
-        <div class="video-label" id="remoteUserName4">Kullanıcı 5</div>
-    </div>
+<div class="video-wrapper hidden" data-user="remote-2" id="remoteVideo2Wrapper">
+    <video class="video-element" id="remoteVideo2" autoplay playsinline></video>
+    <div class="video-label" id="remoteVideo2Label">Kullanıcı 3</div>
+</div>
+
+<div class="video-wrapper hidden" data-user="remote-3" id="remoteVideo3Wrapper">
+    <video class="video-element" id="remoteVideo3" autoplay playsinline></video>
+    <div class="video-label" id="remoteVideo3Label">Kullanıcı 4</div>
+</div>
+
+<div class="video-wrapper hidden" data-user="remote-4" id="remoteVideo4Wrapper">
+    <video class="video-element" id="remoteVideo4" autoplay playsinline></video>
+    <div class="video-label" id="remoteVideo4Label">Kullanıcı 5</div>
+</div>
 </div>
         
         <div class="controls">
@@ -1493,14 +1493,53 @@ this.socket.on('initialize-peer-connections', (data) => {
     
     // Video layout'u güncelle
     this.updateVideoLayout(data.roomUsers.length);
+}); // VİRGÜL EKLEDİM
+
+this.socket.on('check-stream-ready', (data) => {
+    console.log('🔍 Stream hazırlık kontrolü yapılıyor...');
+    
+    // Eğer local stream hazırsa peer connection'ları başlat
+    if (this.isStreamReady && this.localStream) {
+        console.log('✅ Stream hazır, peer connection\'lar başlatılıyor...'); // TIRNAK DÜZELTTİM
+        
+        // Önceki logic'i çalıştır
+        data.otherUsers.forEach(async (user) => {
+            console.log(`📞 ${user.name} ile bağlantı kuruluyor...`);
+            
+            if (!this.peerConnections.has(user.id)) {
+                if (!this.remoteUserIds.includes(user.id)) {
+                    this.remoteUserIds.push(user.id);
+                }
+                await this.createPeerForUser(user);
+            }
+        });
+        
+        this.updateVideoLayout(data.roomUsers.length);
+    } else {
+        console.log('⏳ Stream henüz hazır değil, 1 saniye beklenecek...');
+        
+        // 1 saniye sonra tekrar dene
+        setTimeout(() => {
+            if (this.isStreamReady && this.localStream) {
+                this.socket.emit('stream-ready', {
+                    room: this.currentRoom,
+                    otherUsers: data.otherUsers,
+                    roomUsers: data.roomUsers
+                });
+            }
+        }, 1000);
+    }
+}); // VİRGÜL EKLEDİM
+
+this.socket.on('room-created', (data) => {
+    this.currentRoom = data.room;
+    this.showStatus(`✅ Oda oluşturuldu: ${data.room}`, 'success');
+    document.getElementById('generatedCode').textContent = this.currentRoom;
+    document.getElementById('roomDisplay').classList.remove('hidden');
 });
 
-                this.socket.on('room-created', (data) => {
-                    this.currentRoom = data.room;
-                    this.showStatus(`✅ Oda oluşturuldu: ${data.room}`, 'success');
-                    document.getElementById('generatedCode').textContent = this.currentRoom;
-                    document.getElementById('roomDisplay').classList.remove('hidden');
-                });
+
+                
 
 this.socket.on('offer', async (data) => {
     console.log('📞 Offer geldi:', data.fromName, 'ID:', data.from);
@@ -1547,17 +1586,39 @@ this.socket.on('offer', async (data) => {
         };
         
 // Connection state'i takip et
+// Connection state'i takip et - geliştirilmiş versiyon
 peerConnection.onconnectionstatechange = () => {
     console.log(`🔗 ${data.fromName} bağlantı durumu: ${peerConnection.connectionState}`);
     if (peerConnection.connectionState === 'connected') {
         this.isConnected = true;
         document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
         this.showStatus(`✅ ${data.fromName} ile bağlantı kuruldu!`, 'success');
+        
+        // Bağlantı başarılı olunca retry counter'ı sıfırla
+        if (!peerConnection.retryCount) peerConnection.retryCount = 0;
+        peerConnection.retryCount = 0;
+        
     } else if (peerConnection.connectionState === 'failed') {
         console.error(`❌ ${data.fromName} bağlantı başarısız!`);
-        this.showStatus(`❌ ${data.fromName} ile bağlantı kurulamadı!`, 'error');
+        
+        // Retry mekanizması
+        if (!peerConnection.retryCount) peerConnection.retryCount = 0;
+        peerConnection.retryCount++;
+        
+        if (peerConnection.retryCount <= 3) {
+            console.log(`🔄 ${data.fromName} için ${peerConnection.retryCount}. deneme başlatılıyor...`);
+            setTimeout(() => {
+                if (peerConnection.connectionState === 'failed') {
+                    peerConnection.restartIce();
+                }
+            }, 2000 * peerConnection.retryCount); // Her seferinde daha uzun bekle
+        } else {
+            this.showStatus(`❌ ${data.fromName} ile bağlantı kurulamadı! (3 deneme)`, 'error');
+        }
+        
     } else if (peerConnection.connectionState === 'disconnected') {
         console.warn(`⚠️ ${data.fromName} bağlantısı koptu`);
+        document.getElementById('videoConnectionIndicator').className = 'connection-indicator connecting';
     }
 };
 
@@ -1600,21 +1661,58 @@ if (!this.remoteUserIds.includes(data.from)) {
 }
 
 // Bekleyen ICE candidate'ları işle (eğer varsa)
+// Bekleyen ICE candidate'ları işle (eğer varsa)
 if (peerConnection.pendingCandidates && peerConnection.pendingCandidates.length > 0) {
     console.log(`🧊 ${data.fromName} için ${peerConnection.pendingCandidates.length} bekleyen ICE candidate işleniyor...`);
     
-    for (const candidate of peerConnection.pendingCandidates) {
-        try {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-            console.log(`✅ Bekleyen ICE candidate eklendi: ${data.fromName}`);
-        } catch (candidateError) {
-            console.error(`❌ Bekleyen ICE candidate hatası: ${data.fromName}`, candidateError);
-        }
+    // Kademeli olarak ekle - trafik yoğunluğunu azalt
+    for (let i = 0; i < peerConnection.pendingCandidates.length; i++) {
+        const candidate = peerConnection.pendingCandidates[i];
+        setTimeout(async () => {
+            try {
+                if (peerConnection.connectionState !== 'closed') {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                    console.log(`✅ Bekleyen ICE candidate eklendi: ${data.fromName} (${i + 1}/${peerConnection.pendingCandidates.length})`);
+                }
+            } catch (candidateError) {
+                console.error(`❌ Bekleyen ICE candidate hatası: ${data.fromName}`, candidateError);
+            }
+        }, i * 100); // Her candidate arasında 100ms bekle
     }
     
     // Bekleyen listeyi temizle
     peerConnection.pendingCandidates = [];
 }
+
+// Connection timeout ekle - 30 saniye bekleme
+peerConnection.connectionTimeout = setTimeout(() => {
+    if (peerConnection.connectionState !== 'connected') {
+        console.error(`⏰ ${data.fromName} bağlantı timeout! (30 saniye)`);
+        this.showStatus(`⏰ ${data.fromName} ile bağlantı timeout!`, 'error');
+        
+        // Bağlantıyı yeniden dene
+        if (peerConnection.retryCount < 3) {
+            console.log(`🔄 ${data.fromName} timeout sonrası yeniden deneniyor...`);
+            peerConnection.restartIce();
+        }
+    }
+}, 30000);
+
+// Bağlantı kurulunca timeout'u temizle
+const originalConnectionHandler = peerConnection.onconnectionstatechange;
+peerConnection.onconnectionstatechange = (event) => {
+    if (peerConnection.connectionState === 'connected') {
+        if (peerConnection.connectionTimeout) {
+            clearTimeout(peerConnection.connectionTimeout);
+            peerConnection.connectionTimeout = null;
+        }
+    }
+    
+    // Orijinal handler'ı çağır
+    if (originalConnectionHandler) {
+        originalConnectionHandler.call(peerConnection, event);
+    }
+};
 
 } catch (error) {
     console.error(`❌ ${data.fromName} offer işleme hatası:`, error);
@@ -1631,21 +1729,31 @@ this.socket.on('answer', async (data) => {
             console.log(`✅ ${data.fromName} answer işlendi - bağlantı kuruluyor...`);
             
             // Bekleyen ICE candidate'ları işle
-            if (peerConnection.pendingCandidates && peerConnection.pendingCandidates.length > 0) {
-                console.log(`🧊 ${data.fromName} için ${peerConnection.pendingCandidates.length} bekleyen ICE candidate işleniyor...`);
-                
-                for (const candidate of peerConnection.pendingCandidates) {
-                    try {
-                        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-                        console.log(`✅ Bekleyen ICE candidate eklendi: ${data.fromName}`);
-                    } catch (candidateError) {
-                        console.error(`❌ Bekleyen ICE candidate hatası: ${data.fromName}`, candidateError);
-                    }
+// Bekleyen ICE candidate'ları işle - geliştirilmiş
+if (peerConnection.pendingCandidates && peerConnection.pendingCandidates.length > 0) {
+    console.log(`🧊 ${data.fromName} için ${peerConnection.pendingCandidates.length} bekleyen ICE candidate işleniyor...`);
+    
+    // Kademeli olarak ekle - trafik yoğunluğunu azalt
+    for (let i = 0; i < peerConnection.pendingCandidates.length; i++) {
+        const candidate = peerConnection.pendingCandidates[i];
+        setTimeout(async () => {
+            try {
+                if (peerConnection.connectionState !== 'closed') {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                    console.log(`✅ Bekleyen ICE candidate eklendi: ${data.fromName} (${i + 1}/${peerConnection.pendingCandidates.length})`);
                 }
-                
-                // Bekleyen listeyi temizle
-                peerConnection.pendingCandidates = [];
+            } catch (candidateError) {
+                console.error(`❌ Bekleyen ICE candidate hatası: ${data.fromName}`, candidateError);
             }
+        }, i * 100); // Her candidate arasında 100ms bekle
+    }
+    
+    // Bekleyen listeyi temizle
+    peerConnection.pendingCandidates = [];
+}
+
+
+
         } else {
             console.warn(`⚠️ ${data.fromName} için peer connection bulunamadı veya yanlış state:`, peerConnection?.signalingState);
         }
@@ -1833,6 +1941,37 @@ peerConnection.onicegatheringstatechange = () => {
     } catch (error) {
         console.error(`❌ ${user.name} için offer oluşturma hatası:`, error);
     }
+
+    // Connection timeout ekle - 30 saniye bekleme
+peerConnection.connectionTimeout = setTimeout(() => {
+    if (peerConnection.connectionState !== 'connected') {
+        console.error(`⏰ ${user.name} bağlantı timeout! (30 saniye)`);
+        this.showStatus(`⏰ ${user.name} ile bağlantı timeout!`, 'error');
+        
+        // Bağlantıyı yeniden dene
+        if (!peerConnection.retryCount) peerConnection.retryCount = 0;
+        if (peerConnection.retryCount < 3) {
+            console.log(`🔄 ${user.name} timeout sonrası yeniden deneniyor...`);
+            peerConnection.restartIce();
+        }
+    }
+}, 30000);
+
+// Bağlantı kurulunca timeout'u temizle
+const originalConnectionHandler = peerConnection.onconnectionstatechange;
+peerConnection.onconnectionstatechange = (event) => {
+    if (peerConnection.connectionState === 'connected') {
+        if (peerConnection.connectionTimeout) {
+            clearTimeout(peerConnection.connectionTimeout);
+            peerConnection.connectionTimeout = null;
+        }
+    }
+    
+    // Orijinal handler'ı çağır
+    if (originalConnectionHandler) {
+        originalConnectionHandler.call(peerConnection, event);
+    }
+};
 }
 
 assignVideoElement(userId) {
@@ -1865,17 +2004,17 @@ for (const slotName of slotNames) {
     if (element && wrapper && wrapper.classList.contains('hidden') && !isSlotUsed) {
             // Bu slot'u ata
             this.videoAssignments.set(userId, {
-                slot: slot,
+                slot: slotName,  // slot yerine slotName
                 element: element,
                 wrapper: wrapper,
-                label: document.getElementById(`${slotName}Label`)
+                label: document.getElementById(`${slotName}Label`) // Label ID'si düzelt
             });
             
             // Wrapper'ı göster
             wrapper.classList.remove('hidden');
             wrapper.classList.add('entering');
             
-            console.log(`✅ ${userId} -> ${slot} atandı`);
+            console.log(`✅ ${userId} -> ${slotName} atandı`);
             
             // Layout'u güncelle
             this.updateVideoLayout(this.videoAssignments.size + 1); // +1 local için
@@ -1905,13 +2044,23 @@ releaseVideoElement(userId) {
             assignment.wrapper.classList.remove('entering');
         }
         
-        // Label'ı sıfırla
+        // Label'ı sıfırla - doğru mantık
         if (assignment.label) {
-            assignment.label.textContent = assignment.slot === 'remoteVideo' ? 'Bekleniyor...' : `Kullanıcı ${assignment.slot.replace('remoteVideo', '')}`;
+            if (assignment.slot === 'remoteVideo') {
+                assignment.label.textContent = 'Bekleniyor...';
+            } else {
+                // remoteVideo2 -> 3, remoteVideo3 -> 4, remoteVideo4 -> 5
+                const slotNumber = assignment.slot.replace('remoteVideo', '');
+                const userNumber = slotNumber === '' ? '2' : (parseInt(slotNumber) + 1).toString();
+                assignment.label.textContent = `Kullanıcı ${userNumber}`;
+            }
         }
         
         // Assignment'ı kaldır
         this.videoAssignments.delete(userId);
+        
+        // Video layout'u güncelle
+        this.updateVideoLayout(this.videoAssignments.size + 1); // +1 local için
         
         console.log(`✅ ${assignment.slot} slot'u serbest bırakıldı`);
     } else {
