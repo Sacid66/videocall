@@ -1530,13 +1530,24 @@ this.socket.on('existing-users', (data) => {
         return;
     }
     
+    // TÜMÜ İLE BAĞLAN - zaten var olanları da dahil et
     data.users.forEach((user, index) => {
-        if (user.id !== this.socket.id && !this.peerConnections.has(user.id)) {
-            console.log(`🤝 Mevcut kullanıcı ile bağlantı kuruluyor: ${user.name}`);
-            // Her kullanıcı için farklı delay
+        if (user.id !== this.socket.id) {
+            
+            // Eğer zaten bağlantı varsa kapat
+            if (this.peerConnections.has(user.id)) {
+                console.log(`🔄 ${user.name} ile mevcut bağlantı yeniden kuruluyor...`);
+                const oldPc = this.peerConnections.get(user.id);
+                if (oldPc.connectionState !== 'closed') {
+                    oldPc.close();
+                }
+                this.peerConnections.delete(user.id);
+            }
+            
+            console.log(`🤝 ${user.name} ile bağlantı kuruluyor...`);
             setTimeout(() => {
                 this.createPeerForUser(user);
-            }, 800 + (index * 400));
+            }, 1000 + (index * 500));
         }
     });
 });
