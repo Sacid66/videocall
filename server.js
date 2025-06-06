@@ -200,50 +200,51 @@ io.on('connection', (socket) => {
        }
    }
 
-   function broadcastRoomUpdate(room) {
-       if (!rooms.has(room)) return;
-       
-       const roomUsers = Array.from(rooms.get(room))
-           .map(userId => users.get(userId))
-           .filter(Boolean);
-       
-       const userCount = roomUsers.length;
-       
-       console.log(`📊 Oda güncellemesi: ${room}, ${userCount} kişi`);
-       
-       // Tüm odaya durum gönder
-       io.to(room).emit('room-updated', {
-           userCount: userCount,
-           users: roomUsers,
-           shouldStartCalls: userCount >= 2
-       });
-       
-       // Eğer kimse kalmadıysa odayı sil
-       if (userCount === 0) {
-           rooms.delete(room);
-           console.log(`🗑️ Oda tamamen silindi: ${room}`);
-           return;
-       }
-       
-       // 2+ kişi için MESH network kur
-       if (userCount >= 2) {
-           setTimeout(() => {
-               console.log(`🕸️ ${userCount} kişi için mesh network kuruluyor...`);
-               
-               // HER DURUMDA mesh network kullan (2 kişi de olsa 5 kişi de olsa)
-               roomUsers.forEach(user => {
-                   const otherUsers = roomUsers.filter(u => u.id !== user.id);
-                   
-                   console.log(`👤 ${user.name} için ${otherUsers.length} bağlantı kuruluyor`);
-                   
-                   io.to(user.id).emit('setup-peer-connections', {
-                       allUsers: otherUsers,
-                       myInfo: user
-                   });
-               });
-           }, 1000);
-       }
-   }
+function broadcastRoomUpdate(room) {
+    if (!rooms.has(room)) return;
+    
+    const roomUsers = Array.from(rooms.get(room))
+        .map(userId => users.get(userId))
+        .filter(Boolean);
+    
+    const userCount = roomUsers.length;
+    
+    console.log(`📊 Oda güncellemesi: ${room}, ${userCount} kişi`);
+    
+    // Tüm odaya durum gönder
+    io.to(room).emit('room-updated', {
+        userCount: userCount,
+        users: roomUsers
+    });
+    
+    // Eğer kimse kalmadıysa odayı sil
+    if (userCount === 0) {
+        rooms.delete(room);
+        console.log(`🗑️ Oda tamamen silindi: ${room}`);
+        return;
+    }
+    
+    // Hemen peer connection'ları başlat - sadece 2 kişi olunca
+    if (userCount >= 2) {
+        console.log(`🔗 ${userCount} kişi için peer connection kuruluyor...`);
+        
+        // Her kullanıcı için diğer tüm kullanıcılarla bağlantı kur
+        roomUsers.forEach(currentUser => {
+            const otherUsers = roomUsers.filter(u => u.id !== currentUser.id);
+            
+            console.log(`👤 ${currentUser.name} için ${otherUsers.length} bağlantı kuruluyor`);
+            
+            // Mevcut kullanıcıya diğer tüm kullanıcıları gönder
+            io.to(currentUser.id).emit('initialize-peer-connections', {
+                currentUser: currentUser,
+                otherUsers: otherUsers,
+                roomUsers: roomUsers
+            });
+        });
+    }
+}
+
+
 });
 
 // Port - Render PORT env variable kullanır
