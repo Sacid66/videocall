@@ -1343,9 +1343,8 @@ input, textarea {
             this.screenStream = null;
             this.peerConnections = new Map();
             this.remoteUserIds = [];
-            this.userVideoMap = new Map();
-            this.availableVideoSlots = ['remoteVideo', 'remoteVideo2', 'remoteVideo3', 'remoteVideo4'];
-            this.usedVideoSlots = new Set();
+            this.videoAssignments = new Map(); // userId -> {slot, element, wrapper, label}
+this.maxRemoteVideos = 4; // remoteVideo, remoteVideo2, remoteVideo3, remoteVideo4
 
 this.configuration = {
     iceServers: [
@@ -1370,27 +1369,50 @@ this.configuration = {
             }, 1000);
         }
 
-        cleanupConnections() {
-            // Tüm peer connection'ları kapat
-            this.peerConnections.forEach((pc, userId) => {
-                pc.close();
-                this.releaseVideoElement(userId);
-            });
-            this.peerConnections.clear();
-            
-            // Local stream'i durdur
-            if (this.localStream) {
-                this.localStream.getTracks().forEach(track => track.stop());
-                this.localStream = null;
-            }
-            
-            // Tüm değişkenleri sıfırla
-            this.isStreamReady = false;
-            this.isConnected = false;
-            this.remoteUserIds = [];
-            this.userVideoMap.clear();
-            this.usedVideoSlots.clear();
+cleanupConnections() {
+    console.log('🧹 Tüm bağlantılar temizleniyor...');
+    
+    // Tüm peer connection'ları kapat
+    this.peerConnections.forEach((pc, userId) => {
+        pc.close();
+        this.releaseVideoElement(userId);
+    });
+    this.peerConnections.clear();
+    
+    // Local stream'i durdur
+    if (this.localStream) {
+        this.localStream.getTracks().forEach(track => track.stop());
+        this.localStream = null;
+    }
+    
+    // Screen stream'i durdur
+    if (this.screenStream) {
+        this.screenStream.getTracks().forEach(track => track.stop());
+        this.screenStream = null;
+    }
+    
+    // Tüm değişkenleri sıfırla
+    this.isStreamReady = false;
+    this.isConnected = false;
+    this.remoteUserIds = [];
+    this.videoAssignments.clear();
+    
+    // Tüm remote video wrapper'ları gizle
+    ['remoteVideo', 'remoteVideo2', 'remoteVideo3', 'remoteVideo4'].forEach(slotName => {
+        const wrapper = document.getElementById(`${slotName}Wrapper`);
+        if (wrapper) {
+            wrapper.classList.add('hidden');
+            wrapper.classList.remove('entering');
         }
+        
+        const element = document.getElementById(slotName);
+        if (element) {
+            element.srcObject = null;
+        }
+    });
+    
+    console.log('✅ Tüm bağlantılar temizlendi');
+}
 
         updateVideoLayout(userCount) {
             const videoGrid = document.getElementById('videoGrid');
@@ -1728,14 +1750,30 @@ async createPeerForUser(user) {
     const videoInfo = this.assignVideoElement(user.id);
     
     // Remote stream geldiğinde
-    peerConnection.ontrack = (event) => {
-        console.log(`🎥 ${user.name} stream'i alındı!`, event.streams[0]);
-        if (videoInfo && videoInfo.element && event.streams[0]) {
-            videoInfo.element.srcObject = event.streams[0];
-            videoInfo.label.textContent = user.name;
-            console.log(`✅ Video element'e stream atandı: ${user.name}`);
+// Remote stream geldiğinde
+peerConnection.ontrack = (event) => {
+    console.log('🎥 Stream alındı (createPeerForUser):', user.name, 'ID:', user.id);
+    console.log('📊 Stream detayları:', event.streams[0], 'Tracks:', event.streams[0].getTracks().length);
+    
+    if (videoInfo && videoInfo.element && event.streams[0]) {
+        videoInfo.element.srcObject = event.streams[0];
+        if (videoInfo.label) {
+            videoInfo.label.textContent = user.name || 'Kullanıcı';
         }
-    };
+        console.log(`✅ ${user.name} video ${videoInfo.slot}'a atandı`);
+        
+        // Video element'i oynatmaya zorla
+        videoInfo.element.play().catch(e => {
+            console.log('Video autoplay engellendi, kullanıcı etkileşimi bekleniyor');
+        });
+    } else {
+        console.error(`❌ ${user.name} için video assignment problemi:`, {
+            videoInfo: !!videoInfo,
+            element: !!videoInfo?.element,
+            stream: !!event.streams[0]
+        });
+    }
+};
     
     // ICE candidate'ları gönder
     peerConnection.onicecandidate = (event) => {
@@ -1797,50 +1835,89 @@ peerConnection.onicegatheringstatechange = () => {
     }
 }
 
-        assignVideoElement(userId) {
-            if (this.userVideoMap.has(userId)) {
-                const videoId = this.userVideoMap.get(userId);
-                return {
-                    element: document.getElementById(videoId),
-                    label: document.getElementById(videoId.replace('Video', 'UserName')),
-                    wrapper: document.getElementById(videoId + 'Wrapper') || document.getElementById(videoId).parentElement
-                };
-            }
-            
-            for (const slot of this.availableVideoSlots) {
-                if (!this.usedVideoSlots.has(slot)) {
-                    this.usedVideoSlots.add(slot);
-                    this.userVideoMap.set(userId, slot);
-                    
-                    const element = document.getElementById(slot);
-                    const label = document.getElementById(slot.replace('Video', 'UserName'));
-                    const wrapper = document.getElementById(slot + 'Wrapper') || element.parentElement;
-                    
-if (wrapper && wrapper.classList.contains('hidden')) {
-    wrapper.classList.remove('hidden');
-    wrapper.classList.add('entering');
-    console.log(`📺 Video slot açıldı: ${slot} için ${userId}`);
-}
-                    
-                    return { element, label, wrapper };
-                }
-            }
-            return null;
-        }
+assignVideoElement(userId) {
+    console.log(`📺 Video element atanıyor: ${userId}`);
+    
+    // Kendimize slot atamayız
+    if (userId === this.socket.id) {
+        console.log('⚠️ Kendi ID için video slot atlanamaz');
+        return null;
+    }
+    
+    // Zaten atanmış mı kontrol et
+    if (this.videoAssignments.has(userId)) {
+        const existing = this.videoAssignments.get(userId);
+        console.log(`📺 ${userId} zaten ${existing.slot} slot'unda`);
+        return existing;
+    }
+    
+    // Boş slot bul (2'den başla, 1 local için rezerve)
+// Boş slot bul - ilk remoteVideo, sonra remoteVideo2, remoteVideo3, remoteVideo4
+const slotNames = ['remoteVideo', 'remoteVideo2', 'remoteVideo3', 'remoteVideo4'];
 
-        releaseVideoElement(userId) {
-            if (this.userVideoMap.has(userId)) {
-                const videoId = this.userVideoMap.get(userId);
-                this.usedVideoSlots.delete(videoId);
-                this.userVideoMap.delete(userId);
-                
-                const element = document.getElementById(videoId);
-                const wrapper = document.getElementById(videoId + 'Wrapper') || element.parentElement;
-                
-                if (element) element.srcObject = null;
-                if (wrapper) wrapper.classList.add('hidden');
-            }
+for (const slotName of slotNames) {
+    const element = document.getElementById(slotName);
+    const wrapper = document.getElementById(`${slotName}Wrapper`);
+    
+    // Bu slot kullanılıyor mu kontrol et
+    const isSlotUsed = Array.from(this.videoAssignments.values()).some(assignment => assignment.slot === slotName);
+    
+    if (element && wrapper && wrapper.classList.contains('hidden') && !isSlotUsed) {
+            // Bu slot'u ata
+            this.videoAssignments.set(userId, {
+                slot: slot,
+                element: element,
+                wrapper: wrapper,
+                label: document.getElementById(`${slotName}Label`)
+            });
+            
+            // Wrapper'ı göster
+            wrapper.classList.remove('hidden');
+            wrapper.classList.add('entering');
+            
+            console.log(`✅ ${userId} -> ${slot} atandı`);
+            
+            // Layout'u güncelle
+            this.updateVideoLayout(this.videoAssignments.size + 1); // +1 local için
+            
+            return this.videoAssignments.get(userId);
         }
+    }
+    
+    console.error('❌ Boş video slot bulunamadı!');
+    return null;
+}
+
+releaseVideoElement(userId) {
+    console.log(`🗑️ Video element serbest bırakılıyor: ${userId}`);
+    
+    if (this.videoAssignments.has(userId)) {
+        const assignment = this.videoAssignments.get(userId);
+        
+        // Video stream'i temizle
+        if (assignment.element) {
+            assignment.element.srcObject = null;
+        }
+        
+        // Wrapper'ı gizle
+        if (assignment.wrapper) {
+            assignment.wrapper.classList.add('hidden');
+            assignment.wrapper.classList.remove('entering');
+        }
+        
+        // Label'ı sıfırla
+        if (assignment.label) {
+            assignment.label.textContent = assignment.slot === 'remoteVideo' ? 'Bekleniyor...' : `Kullanıcı ${assignment.slot.replace('remoteVideo', '')}`;
+        }
+        
+        // Assignment'ı kaldır
+        this.videoAssignments.delete(userId);
+        
+        console.log(`✅ ${assignment.slot} slot'u serbest bırakıldı`);
+    } else {
+        console.warn(`⚠️ ${userId} için video assignment bulunamadı`);
+    }
+}
 
         async shareScreen() {
             try {
@@ -2261,19 +2338,18 @@ console.log('Local stream başarıyla başlatıldı:', this.localStream);
         document.getElementById('toggleText').addEventListener('click', () => videoChat.toggleMode());
 
         // Video overlay event'leri
-        document.querySelector('#localVideo').parentElement.addEventListener('click', () => {
-            const localVideo = document.getElementById('localVideo');
-            const localUserName = document.getElementById('localUserName').textContent;
-            videoChat.showVideoOverlay(localVideo, localUserName);
-        });
-
-        document.querySelector('#remoteVideo').parentElement.addEventListener('click', () => {
-            const remoteVideo = document.getElementById('remoteVideo');
-            const remoteUserName = document.getElementById('remoteUserName').textContent;
-            if (remoteVideo.srcObject) {
-                videoChat.showVideoOverlay(remoteVideo, remoteUserName);
-            }
-        });
+// Video overlay event'leri - TÜM video wrapper'lar için
+document.addEventListener('click', (e) => {
+    const videoWrapper = e.target.closest('.video-wrapper');
+    if (videoWrapper) {
+        const video = videoWrapper.querySelector('.video-element');
+        const label = videoWrapper.querySelector('.video-label');
+        
+        if (video && video.srcObject && label) {
+            videoChat.showVideoOverlay(video, label.textContent);
+        }
+    }
+});
 
         document.getElementById('overlayCloseBtn').addEventListener('click', () => {
             videoChat.hideVideoOverlay();
