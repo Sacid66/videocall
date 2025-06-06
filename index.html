@@ -1578,12 +1578,34 @@ this.socket.on('offer', async (data) => {
     }
 });
 
-                this.socket.on('answer', async (data) => {
-                    const peerConnection = this.peerConnections.get(data.from);
-                    if (peerConnection) {
-                        await peerConnection.setRemoteDescription(data.answer);
+this.socket.on('answer', async (data) => {
+    console.log('📋 Answer geldi:', data.from, data.fromName);
+    
+    const peerConnection = this.peerConnections.get(data.from);
+    if (peerConnection) {
+        try {
+            await peerConnection.setRemoteDescription(data.answer);
+            console.log('✅ Answer işlendi:', data.from);
+            
+            // Host için önemli: Remote stream'i kontrol et
+            if (peerConnection.getRemoteStreams && peerConnection.getRemoteStreams().length > 0) {
+                console.log('🎥 Host remote stream aldı!');
+                const videoInfo = this.userVideoMap.get(data.from);
+                if (videoInfo) {
+                    const videoElement = document.getElementById(videoInfo);
+                    if (videoElement && !videoElement.srcObject) {
+                        videoElement.srcObject = peerConnection.getRemoteStreams()[0];
                     }
-                });
+                }
+            }
+            
+        } catch (error) {
+            console.error('❌ Answer işleme hatası:', error);
+        }
+    } else {
+        console.error('❌ Answer için peer connection bulunamadı:', data.from);
+    }
+});
 
 this.socket.on('ice-candidate', async (data) => {
     const { candidate, from } = data;
