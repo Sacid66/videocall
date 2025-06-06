@@ -1370,7 +1370,7 @@ cleanupConnections() {
     console.log('🧹 Bağlantılar temizleniyor...');
     
     // Tüm peer connection'ları kapat
-    this.peerConnections.forEach((pc, userId) => {
+   this.peerConnections.forEach((pc, userId) => {
         console.log(`🔌 ${userId} bağlantısı kapatılıyor`);
         if (pc.connectionState !== 'closed') {
             pc.close();
@@ -1378,6 +1378,11 @@ cleanupConnections() {
         this.releaseVideoElement(userId);
     });
     this.peerConnections.clear();
+    
+    // Pending ICE candidates'ları temizle
+    if (this.pendingIceCandidates) {
+        this.pendingIceCandidates.clear();
+    }
     
     // Screen sharing'i durdur
     if (this.isScreenSharing && this.screenStream) {
@@ -1522,6 +1527,7 @@ this.socket.on('existing-users', (data) => {
     console.log('📋 Mevcut kullanıcılar alındı:', data.users.length);
     
     // Stream hazır değilse bekle
+    // Stream hazır değilse bekle
     if (!this.isStreamReady) {
         console.log('⏳ Stream henüz hazır değil, existing users bekletiliyor...');
         setTimeout(() => {
@@ -1530,28 +1536,20 @@ this.socket.on('existing-users', (data) => {
         return;
     }
     
-    // TÜMÜ İLE BAĞLAN - zaten var olanları da dahil et
+    // Video elementlerini sıfırla
+    this.userVideoMap.clear();
+    this.usedVideoSlots.clear();
+    
+    // Her kullanıcı ile sırayla bağlantı kur
     data.users.forEach((user, index) => {
         if (user.id !== this.socket.id) {
-            
-            // Eğer zaten bağlantı varsa kapat
-            if (this.peerConnections.has(user.id)) {
-                console.log(`🔄 ${user.name} ile mevcut bağlantı yeniden kuruluyor...`);
-                const oldPc = this.peerConnections.get(user.id);
-                if (oldPc.connectionState !== 'closed') {
-                    oldPc.close();
-                }
-                this.peerConnections.delete(user.id);
-            }
-            
             console.log(`🤝 ${user.name} ile bağlantı kuruluyor...`);
             setTimeout(() => {
                 this.createPeerForUser(user);
-            }, 1000 + (index * 500));
+            }, 500 + (index * 1000)); // Daha uzun delay
         }
     });
 });
-
                 this.socket.on('room-created', (data) => {
                     this.currentRoom = data.room;
                     this.showStatus(`✅ Oda oluşturuldu: ${data.room}`, 'success');
@@ -1666,6 +1664,24 @@ this.socket.on('ice-candidate', async (data) => {
     }
 });
 
+this.socket.on('new-peer-to-connect', (data) => {
+    console.log('🆕 Yeni peer bağlantısı kurulacak:', data.user.name);
+    
+    // Stream hazır değilse bekle
+    if (!this.isStreamReady) {
+        console.log('⏳ Stream hazır değil, bağlantı erteleniyor...');
+        setTimeout(() => {
+            this.socket.emit('new-peer-to-connect', data);
+        }, 500);
+        return;
+    }
+    
+    // Yeni kullanıcı ile bağlantı kur
+    if (!this.peerConnections.has(data.user.id)) {
+        this.createPeerForUser(data.user);
+    }
+});
+
 this.socket.on('user-joined', (data) => {
     console.log('👋 Yeni kullanıcı katıldı:', data.userName);
     this.showStatus(`👋 ${data.userName} odaya katıldı!`, 'success');
@@ -1768,9 +1784,16 @@ this.socket.on('user-joined', (data) => {
         }
 
 async createPeerForUser(user) {
-    if (this.peerConnections.has(user.id)) {
-        console.log('Bu kullanıcı için zaten connection var:', user.id);
-        return;
+     if (this.peerConnections.has(user.id)) {
+        const existingPc = this.peerConnections.get(user.id);
+        if (existingPc.connectionState === 'connected' || existingPc.connectionState === 'connecting') {
+            console.log('✅ Bu kullanıcı için zaten aktif connection var:', user.id);
+            return;
+        } else {
+            console.log('🔄 Eski connection kapatılıp yenisi oluşturuluyor:', user.id);
+            existingPc.close();
+            this.peerConnections.delete(user.id);
+        }
     }
     
     console.log(`🔗 ${user.name} için peer connection oluşturuluyor...`);
