@@ -104,7 +104,9 @@ socket.on('join-room', (data, callback) => {
     // Diğer kullanıcılara yeni kullanıcı katıldığını bildir
     socket.to(room).emit('user-joined', {
         userId: socket.id,
-        userName: userName
+        userName: userName,
+        room: room,
+        totalUsers: rooms.get(room).size
     });
     
     // Oda durumunu güncelle
@@ -148,14 +150,24 @@ socket.on('stream-ready', (data) => {
         .map(id => users.get(id))
         .filter(Boolean);
     
-    // SADECE mevcut kullanıcıları gönder, setup-peer-connections gönderme
     const otherUsers = roomUsers.filter(u => u.id !== userId);
     
     if (otherUsers.length > 0) {
         console.log(`📤 ${userName} için ${otherUsers.length} mevcut kullanıcı gönderiliyor`);
+        
+        // Yeni kullanıcıya mevcut kullanıcıları gönder
         io.to(userId).emit('existing-users', {
             users: otherUsers
         });
+        
+        // ÖNEMLI: Mevcut kullanıcılara da yeni kullanıcıyı bildir
+        setTimeout(() => {
+            otherUsers.forEach(otherUser => {
+                io.to(otherUser.id).emit('new-peer-to-connect', {
+                    user: users.get(userId)
+                });
+            });
+        }, 1000);
     }
 });
 
