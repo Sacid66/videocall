@@ -133,6 +133,31 @@ socket.on('ice-candidate', (data) => {
     });
 });
 
+// Stream ready event'i - client stream hazır olduğunda
+socket.on('stream-ready', (data) => {
+    const { room, otherUsers, roomUsers } = data;
+    console.log(`✅ ${users.get(socket.id)?.name} stream'i hazır - peer connection'lar başlatılıyor...`);
+    
+    // Bu kullanıcı için diğer kullanıcılarla bağlantı kur
+    if (otherUsers && otherUsers.length > 0) {
+        otherUsers.forEach(async (user) => {
+            console.log(`🔗 ${users.get(socket.id)?.name} -> ${user.name} bağlantısı başlatılıyor...`);
+            
+            // Bu kullanıcıya initialize-peer-connections gönder
+            socket.emit('initialize-peer-connections', {
+                currentUser: users.get(socket.id),
+                otherUsers: [user], // Sadece bu kullanıcı için
+                roomUsers: roomUsers
+            });
+        });
+    }
+});
+
+// Chat
+socket.on('chat-message', (data) => {
+    // ... mevcut kod
+});
+
    // Chat
    socket.on('chat-message', (data) => {
        const { room, message, sender } = data;
@@ -159,6 +184,27 @@ socket.on('ice-candidate', (data) => {
    socket.on('disconnect', () => {
        handleUserLeave(socket);
    });
+
+
+   // Stream ready event'i - client stream hazır olduğunda
+socket.on('stream-ready', (data) => {
+    const { room, otherUsers, roomUsers } = data;
+    console.log(`✅ ${users.get(socket.id)?.name} stream'i hazır - peer connection'lar başlatılıyor...`);
+    
+    // Bu kullanıcı için diğer kullanıcılarla bağlantı kur
+    if (otherUsers && otherUsers.length > 0) {
+        otherUsers.forEach(async (user) => {
+            console.log(`🔗 ${users.get(socket.id)?.name} -> ${user.name} bağlantısı başlatılıyor...`);
+            
+            // Bu kullanıcıya initialize-peer-connections gönder
+            socket.emit('initialize-peer-connections', {
+                currentUser: users.get(socket.id),
+                otherUsers: [user], // Sadece bu kullanıcı için
+                roomUsers: roomUsers
+            });
+        });
+    }
+});
 
    // Yardımcı fonksiyonlar
    function leaveCurrentRoom(socket) {
@@ -226,24 +272,27 @@ function broadcastRoomUpdate(room) {
         return;
     }
     
-    // Hemen peer connection'ları başlat - sadece 2 kişi olunca
-    if (userCount >= 2) {
-        console.log(`🔗 ${userCount} kişi için peer connection kuruluyor...`);
-        
+// Peer connection'ları başlat - geliştirilmiş versiyon
+if (userCount >= 2) {
+    console.log(`🔗 ${userCount} kişi için peer connection kuruluyor...`);
+    
+    // Kısa bir gecikme ile peer connection'ları başlat (stream hazır olması için)
+    setTimeout(() => {
         // Her kullanıcı için diğer tüm kullanıcılarla bağlantı kur
         roomUsers.forEach(currentUser => {
             const otherUsers = roomUsers.filter(u => u.id !== currentUser.id);
             
             console.log(`👤 ${currentUser.name} için ${otherUsers.length} bağlantı kuruluyor`);
             
-            // Mevcut kullanıcıya diğer tüm kullanıcıları gönder
-            io.to(currentUser.id).emit('initialize-peer-connections', {
+            // Önce kullanıcıya stream hazır olup olmadığını sor
+            io.to(currentUser.id).emit('check-stream-ready', {
                 currentUser: currentUser,
                 otherUsers: otherUsers,
                 roomUsers: roomUsers
             });
         });
-    }
+    }, 500); // 500ms gecikme - stream'lerin hazır olması için
+}
 }
 
 
