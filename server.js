@@ -139,7 +139,6 @@ socket.on('join-room', (data, callback) => {
        });
    });
 
-// Stream hazır olduğunda peer bağlantılarını kur
 socket.on('stream-ready', (data) => {
     const { room, userId, userName } = data;
     console.log(`🎥 ${userName} stream'i hazır`);
@@ -154,8 +153,6 @@ socket.on('stream-ready', (data) => {
     
     if (otherUsers.length > 0) {
         console.log(`📤 ${userName} için ${otherUsers.length} mevcut kullanıcı gönderiliyor`);
-        
-        // Yeni kullanıcıya mevcut kullanıcıları gönder
         io.to(userId).emit('existing-users', {
             users: otherUsers
         });
@@ -169,6 +166,7 @@ socket.on('stream-ready', (data) => {
             });
         }, 1000);
     }
+    broadcastRoomUpdate(room);
 });
 
    // Chat
