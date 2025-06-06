@@ -124,12 +124,14 @@ io.on('connection', (socket) => {
        });
    });
 
-   socket.on('ice-candidate', (data) => {
-       socket.to(data.to).emit('ice-candidate', {
-           candidate: data.candidate,
-           from: socket.id
-       });
-   });
+socket.on('ice-candidate', (data) => {
+    console.log(`🧊 ICE candidate iletiliyor: ${socket.id} -> ${data.to}`);
+    socket.to(data.to).emit('ice-candidate', {
+        candidate: data.candidate,
+        from: socket.id,
+        fromName: users.get(socket.id)?.name
+    });
+});
 
    // Chat
    socket.on('chat-message', (data) => {
