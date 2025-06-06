@@ -1587,6 +1587,16 @@ this.socket.on('answer', async (data) => {
             await peerConnection.setRemoteDescription(data.answer);
             console.log('✅ Answer işlendi:', data.from);
             
+            // HOST için: Stream'i manuel kontrol et
+            if (this.isHost) {
+                console.log('🏠 Host olarak stream kontrol ediliyor...');
+                setTimeout(() => {
+                    if (!peerConnection.getRemoteStreams || peerConnection.getRemoteStreams().length === 0) {
+                        console.log('⚠️ Remote stream yok, ontrack beklenmiyor olabilir');
+                    }
+                }, 1000);
+            }
+            
         } catch (error) {
             console.error('❌ Answer işleme hatası:', error);
         }
@@ -1713,14 +1723,7 @@ async createPeerForUser(user) {
     // ÖNCE video element'i assign et
     const videoInfo = this.assignVideoElement(user.id);
     
-    // Local stream'i ekle
-    if (this.localStream) {
-        this.localStream.getTracks().forEach(track => {
-            peerConnection.addTrack(track, this.localStream);
-        });
-    }
-    
-    // ontrack event handler - EN ÖNEMLİ KISIM
+    // ontrack event handler - ÖNCE TANIMLA
     peerConnection.ontrack = (event) => {
         console.log(`🎥 ${user.name} stream'i alındı!`, event.streams);
         
@@ -1768,6 +1771,14 @@ async createPeerForUser(user) {
             this.showStatus(`❌ ${user.name} ile bağlantı başarısız`, 'error');
         }
     };
+    
+    // STREAM TRACK'LERİNİ HEMEN EKLE (ontrack'den ÖNCE!)
+    if (this.localStream) {
+        this.localStream.getTracks().forEach(track => {
+            console.log(`🎵 Track ekleniyor: ${track.kind}`);
+            peerConnection.addTrack(track, this.localStream);
+        });
+    }
     
     // Offer oluştur (sadece küçük ID)
     if (this.socket.id < user.id) {
