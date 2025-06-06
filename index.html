@@ -1491,17 +1491,27 @@ updateVideoLayout(userCount) {
 this.socket.on('setup-peer-connections', (data) => {
     console.log(`🔗 ${data.allUsers.length} kişi ile bağlantı kuruluyor...`);
     
+    // Stream hazır olana kadar bekle
+    if (!this.isStreamReady) {
+        console.log('⏳ Stream henüz hazır değil, bekleniyor...');
+        setTimeout(() => {
+            this.socket.emit('setup-peer-connections', data);
+        }, 1000);
+        return;
+    }
+    
     data.allUsers.forEach(user => {
-        console.log(`📞 ${user.name} ile bağlantı kuruluyor...`);
-        
-        // Eğer zaten connection varsa ve açıksa skip et
-        const existingPc = this.peerConnections.get(user.id);
-        if (existingPc && existingPc.connectionState !== 'closed' && existingPc.connectionState !== 'failed') {
-            console.log('✅ Zaten aktif connection var:', user.id);
-            return;
+        if (user.id !== this.socket.id) {
+            console.log(`📞 ${user.name} ile bağlantı kuruluyor...`);
+            
+            // Eğer zaten connection varsa skip et
+            if (this.peerConnections.has(user.id)) {
+                console.log('✅ Zaten connection var:', user.id);
+                return;
+            }
+            
+            this.createPeerForUser(user);
         }
-        
-        this.createPeerForUser(user);
     });
 });
 
@@ -1610,6 +1620,19 @@ this.socket.on('ice-candidate', async (data) => {
         }, 1000);
     }
 });
+
+
+                // YENİ EVENT HANDLER EKLE
+                this.socket.on('room-users-list', (data) => {
+                    console.log('📋 Oda kullanıcıları alındı:', data.users.length);
+                    
+                    data.users.forEach(user => {
+                        if (user.id !== this.socket.id && !this.peerConnections.has(user.id)) {
+                            console.log(`🤝 Mevcut kullanıcı ile bağlantı kuruluyor: ${user.name}`);
+                            this.createPeerForUser(user);
+                        }
+                    });
+                });
 
                 this.socket.on('peer-disconnected', (data) => {
                     console.log('🔌 Peer ayrıldı:', data.userId);
@@ -2113,13 +2136,19 @@ async startLocalStream() {
         
         console.log('✅ Local stream başarıyla başlatıldı');
         
-        // Stream hazır olduğunu bildir
+// Stream hazır olduğunu BİLDİR ve peer connection'ları BAŞLAT
         setTimeout(() => {
             if (this.socket && this.currentRoom) {
+                console.log('🎥 Stream hazır, server\'a bildirilliyor...');
                 this.socket.emit('stream-ready', {
                     room: this.currentRoom,
                     userId: this.socket.id,
                     userName: this.userName
+                });
+                
+                // EKLEME: Mevcut kullanıcılarla bağlantı kur
+                this.socket.emit('request-room-users', {
+                    room: this.currentRoom
                 });
             }
         }, 1000);
