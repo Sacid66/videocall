@@ -1500,25 +1500,31 @@ this.socket.on('setup-peer-connections', (data) => {
     if (!this.isStreamReady) {
         console.log('⏳ Stream henüz hazır değil, bekleniyor...');
         setTimeout(() => {
-            this.socket.on('setup-peer-connections', data);
+            this.socket.emit('get-existing-users', { room: this.currentRoom });
         }, 1000);
         return;
     }
     
-    data.allUsers.forEach(user => {
+    // Önce mevcut bağlantıları temizle
+    this.peerConnections.forEach((pc, userId) => {
+        if (!data.allUsers.find(u => u.id === userId)) {
+            pc.close();
+            this.peerConnections.delete(userId);
+            this.releaseVideoElement(userId);
+        }
+    });
+    
+    data.allUsers.forEach((user, index) => {
         if (user.id !== this.socket.id) {
             console.log(`📞 ${user.name} ile bağlantı kuruluyor...`);
             
-            // Eğer zaten connection varsa skip et
-            if (this.peerConnections.has(user.id)) {
-                console.log('✅ Zaten connection var:', user.id);
-                return;
+            // Bağlantı yoksa veya kapalıysa yeni oluştur
+            const existingPc = this.peerConnections.get(user.id);
+            if (!existingPc || existingPc.connectionState === 'closed' || existingPc.connectionState === 'failed') {
+                setTimeout(() => {
+                    this.createPeerForUser(user);
+                }, 500 * index);
             }
-            
-            // DELAY ekle
-            setTimeout(() => {
-                this.createPeerForUser(user);
-            }, 500 * (this.peerConnections.size + 1));
         }
     });
 });
@@ -1854,35 +1860,38 @@ async createPeerForUser(user) {
     
     // Offer oluştur (sadece küçük ID)
 // Offer oluştur - delay ile ve daha güvenilir
-setTimeout(async () => {
-    try {
-        console.log(`📤 ${user.name} için offer oluşturuluyor...`);
-        
-        // Connection state kontrol et
-        if (peerConnection.connectionState === 'closed') {
-            console.log('❌ Connection zaten kapalı, offer gönderilmiyor');
-            return;
+// Offer oluştur - sadece socket ID'si küçük olan offer göndersin (collision önleme)
+if (this.socket.id < user.id) {
+    setTimeout(async () => {
+        try {
+            console.log(`📤 ${user.name} için offer oluşturuluyor...`);
+            
+            // Connection state kontrol et
+            if (peerConnection.connectionState === 'closed') {
+                console.log('❌ Connection zaten kapalı, offer gönderilmiyor');
+                return;
+            }
+            
+            const offer = await peerConnection.createOffer({
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
+            });
+            
+            await peerConnection.setLocalDescription(offer);
+            
+            this.socket.emit('offer', { 
+                to: user.id, 
+                offer: offer,
+                fromName: this.userName
+            });
+            
+            console.log(`✅ Offer gönderildi: ${user.name}`);
+            
+        } catch (error) {
+            console.error(`❌ Offer oluşturma hatası:`, error);
         }
-        
-        const offer = await peerConnection.createOffer({
-            offerToReceiveAudio: true,
-            offerToReceiveVideo: true
-        });
-        
-        await peerConnection.setLocalDescription(offer);
-        
-        this.socket.emit('offer', { 
-            to: user.id, 
-            offer: offer,
-            fromName: this.userName
-        });
-        
-        console.log(`✅ Offer gönderildi: ${user.name}`);
-        
-    } catch (error) {
-        console.error(`❌ Offer oluşturma hatası:`, error);
-    }
-}, 1000);
+    }, 100);
+}
 }
 
 assignVideoElement(userId) {
