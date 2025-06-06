@@ -1587,18 +1587,6 @@ this.socket.on('answer', async (data) => {
             await peerConnection.setRemoteDescription(data.answer);
             console.log('✅ Answer işlendi:', data.from);
             
-            // Host için önemli: Remote stream'i kontrol et
-            if (peerConnection.getRemoteStreams && peerConnection.getRemoteStreams().length > 0) {
-                console.log('🎥 Host remote stream aldı!');
-                const videoInfo = this.userVideoMap.get(data.from);
-                if (videoInfo) {
-                    const videoElement = document.getElementById(videoInfo);
-                    if (videoElement && !videoElement.srcObject) {
-                        videoElement.srcObject = peerConnection.getRemoteStreams()[0];
-                    }
-                }
-            }
-            
         } catch (error) {
             console.error('❌ Answer işleme hatası:', error);
         }
