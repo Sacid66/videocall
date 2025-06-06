@@ -1659,23 +1659,33 @@ this.socket.on('user-joined', (data) => {
     console.log('👋 Yeni kullanıcı katıldı:', data.userName);
     this.showStatus(`👋 ${data.userName} odaya katıldı!`, 'success');
     
-    // YENİ GELEN KİŞİ İÇİN CONNECTION KUR
-    if (this.isStreamReady && !this.peerConnections.has(data.userId)) {
-        setTimeout(() => {
-            this.createPeerForUser({
-                id: data.userId,
-                name: data.userName
-            });
-        }, 1000);
-    }
+    // KRITIK: Tüm connection'ları temizle ve yeniden kur
+    console.log('🔄 Yeni kullanıcı geldi, tüm bağlantılar yeniden kuruluyor...');
     
-    // YENİ GELEN KİŞİYE MEVCUT KULLANICILARI GÖNDER
-    if (this.socket && this.currentRoom) {
-        this.socket.emit('request-user-list', {
-            room: this.currentRoom,
-            newUserId: data.userId
-        });
-    }
+    // Mevcut peer connection'ları kapat (stream'leri koruyarak)
+    this.peerConnections.forEach((pc, userId) => {
+        if (pc.connectionState !== 'closed') {
+            pc.close();
+        }
+    });
+    this.peerConnections.clear();
+    
+    // Video element'leri temizle ama wrapper'ları gizleme
+    this.userVideoMap.forEach((videoId, userId) => {
+        const element = document.getElementById(videoId);
+        if (element) {
+            element.srcObject = null;
+        }
+    });
+    
+    // Yeni kullanıcı listesini al ve herkesle yeniden bağlan
+    setTimeout(() => {
+        if (this.socket && this.currentRoom) {
+            this.socket.emit('get-existing-users', {
+                room: this.currentRoom
+            });
+        }
+    }, 1500);
 });
 
 
