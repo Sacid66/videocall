@@ -124,39 +124,12 @@ io.on('connection', (socket) => {
        });
    });
 
-socket.on('ice-candidate', (data) => {
-    console.log(`🧊 ICE candidate iletiliyor: ${socket.id} -> ${data.to}`);
-    socket.to(data.to).emit('ice-candidate', {
-        candidate: data.candidate,
-        from: socket.id,
-        fromName: users.get(socket.id)?.name
-    });
-});
-
-// Stream ready event'i - client stream hazır olduğunda
-socket.on('stream-ready', (data) => {
-    const { room, otherUsers, roomUsers } = data;
-    console.log(`✅ ${users.get(socket.id)?.name} stream'i hazır - peer connection'lar başlatılıyor...`);
-    
-    // Bu kullanıcı için diğer kullanıcılarla bağlantı kur
-    if (otherUsers && otherUsers.length > 0) {
-        otherUsers.forEach(async (user) => {
-            console.log(`🔗 ${users.get(socket.id)?.name} -> ${user.name} bağlantısı başlatılıyor...`);
-            
-            // Bu kullanıcıya initialize-peer-connections gönder
-            socket.emit('initialize-peer-connections', {
-                currentUser: users.get(socket.id),
-                otherUsers: [user], // Sadece bu kullanıcı için
-                roomUsers: roomUsers
-            });
-        });
-    }
-});
-
-// Chat
-socket.on('chat-message', (data) => {
-    // ... mevcut kod
-});
+   socket.on('ice-candidate', (data) => {
+       socket.to(data.to).emit('ice-candidate', {
+           candidate: data.candidate,
+           from: socket.id
+       });
+   });
 
    // Chat
    socket.on('chat-message', (data) => {
@@ -184,27 +157,6 @@ socket.on('chat-message', (data) => {
    socket.on('disconnect', () => {
        handleUserLeave(socket);
    });
-
-
-   // Stream ready event'i - client stream hazır olduğunda
-socket.on('stream-ready', (data) => {
-    const { room, otherUsers, roomUsers } = data;
-    console.log(`✅ ${users.get(socket.id)?.name} stream'i hazır - peer connection'lar başlatılıyor...`);
-    
-    // Bu kullanıcı için diğer kullanıcılarla bağlantı kur
-    if (otherUsers && otherUsers.length > 0) {
-        otherUsers.forEach(async (user) => {
-            console.log(`🔗 ${users.get(socket.id)?.name} -> ${user.name} bağlantısı başlatılıyor...`);
-            
-            // Bu kullanıcıya initialize-peer-connections gönder
-            socket.emit('initialize-peer-connections', {
-                currentUser: users.get(socket.id),
-                otherUsers: [user], // Sadece bu kullanıcı için
-                roomUsers: roomUsers
-            });
-        });
-    }
-});
 
    // Yardımcı fonksiyonlar
    function leaveCurrentRoom(socket) {
@@ -262,7 +214,8 @@ function broadcastRoomUpdate(room) {
     // Tüm odaya durum gönder
     io.to(room).emit('room-updated', {
         userCount: userCount,
-        users: roomUsers
+        users: roomUsers,
+        shouldStartCalls: userCount === 2 // Sadece 2 kişi olduğunda
     });
     
     // Eğer kimse kalmadıysa odayı sil
@@ -272,27 +225,21 @@ function broadcastRoomUpdate(room) {
         return;
     }
     
-// Peer connection'ları başlat - geliştirilmiş versiyon
-if (userCount >= 2) {
-    console.log(`🔗 ${userCount} kişi için peer connection kuruluyor...`);
-    
-    // Kısa bir gecikme ile peer connection'ları başlat (stream hazır olması için)
-    setTimeout(() => {
-        // Her kullanıcı için diğer tüm kullanıcılarla bağlantı kur
-        roomUsers.forEach(currentUser => {
-            const otherUsers = roomUsers.filter(u => u.id !== currentUser.id);
+    // Sadece 2 kişi olduğunda peer setup başlat
+    if (userCount === 2) {
+        setTimeout(() => {
+            console.log(`🔗 2 kişi için bağlantı kuruluyor...`);
             
-            console.log(`👤 ${currentUser.name} için ${otherUsers.length} bağlantı kuruluyor`);
-            
-            // Önce kullanıcıya stream hazır olup olmadığını sor
-            io.to(currentUser.id).emit('check-stream-ready', {
-                currentUser: currentUser,
-                otherUsers: otherUsers,
-                roomUsers: roomUsers
+            roomUsers.forEach(user => {
+                const otherUsers = roomUsers.filter(u => u.id !== user.id);
+                
+                io.to(user.id).emit('setup-peer-connections', {
+                    allUsers: otherUsers,
+                    myInfo: user
+                });
             });
-        });
-    }, 500); // 500ms gecikme - stream'lerin hazır olması için
-}
+        }, 1500); // Biraz daha uzun bekle
+    }
 }
 
 
