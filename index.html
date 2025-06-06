@@ -1347,13 +1347,18 @@ input, textarea {
             this.availableVideoSlots = ['remoteVideo', 'remoteVideo2', 'remoteVideo3', 'remoteVideo4'];
             this.usedVideoSlots = new Set();
 
-            this.configuration = {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun2.l.google.com:19302' }
-                ]
-            };
+this.configuration = {
+    iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' }
+    ],
+    iceCandidatePoolSize: 10,
+    bundlePolicy: 'max-bundle',
+    rtcpMuxPolicy: 'require'
+};
 
             this.initializeSocket();
 
@@ -1519,14 +1524,35 @@ this.socket.on('offer', async (data) => {
             }
         };
         
-        // Connection state'i takip et
-        peerConnection.onconnectionstatechange = () => {
-            console.log(`🔗 ${data.fromName} bağlantı durumu: ${peerConnection.connectionState}`);
-            if (peerConnection.connectionState === 'connected') {
-                this.isConnected = true;
-                document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
-            }
-        };
+// Connection state'i takip et
+peerConnection.onconnectionstatechange = () => {
+    console.log(`🔗 ${data.fromName} bağlantı durumu: ${peerConnection.connectionState}`);
+    if (peerConnection.connectionState === 'connected') {
+        this.isConnected = true;
+        document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
+        this.showStatus(`✅ ${data.fromName} ile bağlantı kuruldu!`, 'success');
+    } else if (peerConnection.connectionState === 'failed') {
+        console.error(`❌ ${data.fromName} bağlantı başarısız!`);
+        this.showStatus(`❌ ${data.fromName} ile bağlantı kurulamadı!`, 'error');
+    } else if (peerConnection.connectionState === 'disconnected') {
+        console.warn(`⚠️ ${data.fromName} bağlantısı koptu`);
+    }
+};
+
+// ICE connection state'i de takip et
+peerConnection.oniceconnectionstatechange = () => {
+    console.log(`🧊 ${data.fromName} ICE durumu: ${peerConnection.iceConnectionState}`);
+    if (peerConnection.iceConnectionState === 'failed') {
+        console.error(`❌ ${data.fromName} ICE bağlantısı başarısız!`);
+        // ICE restart dene
+        peerConnection.restartIce();
+    }
+};
+
+// ICE gathering state'i takip et
+peerConnection.onicegatheringstatechange = () => {
+    console.log(`🔍 ${data.fromName} ICE gathering: ${peerConnection.iceGatheringState}`);
+};
         
         // Remote description'ı ayarla
         await peerConnection.setRemoteDescription(data.offer);
@@ -1546,13 +1572,31 @@ this.socket.on('offer', async (data) => {
         });
         
         // Remote user ID'yi ekle
-        if (!this.remoteUserIds.includes(data.from)) {
-            this.remoteUserIds.push(data.from);
+// Remote user ID'yi ekle
+if (!this.remoteUserIds.includes(data.from)) {
+    this.remoteUserIds.push(data.from);
+}
+
+// Bekleyen ICE candidate'ları işle (eğer varsa)
+if (peerConnection.pendingCandidates && peerConnection.pendingCandidates.length > 0) {
+    console.log(`🧊 ${data.fromName} için ${peerConnection.pendingCandidates.length} bekleyen ICE candidate işleniyor...`);
+    
+    for (const candidate of peerConnection.pendingCandidates) {
+        try {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            console.log(`✅ Bekleyen ICE candidate eklendi: ${data.fromName}`);
+        } catch (candidateError) {
+            console.error(`❌ Bekleyen ICE candidate hatası: ${data.fromName}`, candidateError);
         }
-        
-    } catch (error) {
-        console.error(`❌ ${data.fromName} offer işleme hatası:`, error);
     }
+    
+    // Bekleyen listeyi temizle
+    peerConnection.pendingCandidates = [];
+}
+
+} catch (error) {
+    console.error(`❌ ${data.fromName} offer işleme hatası:`, error);
+}
 });
 
 this.socket.on('answer', async (data) => {
@@ -1563,20 +1607,53 @@ this.socket.on('answer', async (data) => {
         if (peerConnection && peerConnection.signalingState === 'have-local-offer') {
             await peerConnection.setRemoteDescription(data.answer);
             console.log(`✅ ${data.fromName} answer işlendi - bağlantı kuruluyor...`);
+            
+            // Bekleyen ICE candidate'ları işle
+            if (peerConnection.pendingCandidates && peerConnection.pendingCandidates.length > 0) {
+                console.log(`🧊 ${data.fromName} için ${peerConnection.pendingCandidates.length} bekleyen ICE candidate işleniyor...`);
+                
+                for (const candidate of peerConnection.pendingCandidates) {
+                    try {
+                        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                        console.log(`✅ Bekleyen ICE candidate eklendi: ${data.fromName}`);
+                    } catch (candidateError) {
+                        console.error(`❌ Bekleyen ICE candidate hatası: ${data.fromName}`, candidateError);
+                    }
+                }
+                
+                // Bekleyen listeyi temizle
+                peerConnection.pendingCandidates = [];
+            }
         } else {
-            console.warn(`⚠️ ${data.fromName} için peer connection bulunamadı veya yanlış state`);
+            console.warn(`⚠️ ${data.fromName} için peer connection bulunamadı veya yanlış state:`, peerConnection?.signalingState);
         }
     } catch (error) {
         console.error(`❌ ${data.fromName} answer işleme hatası:`, error);
     }
 });
 
-                this.socket.on('ice-candidate', async (data) => {
-                    const peerConnection = this.peerConnections.get(data.from);
-                    if (peerConnection) {
-                        await peerConnection.addIceCandidate(data.candidate);
-                    }
-                });
+this.socket.on('ice-candidate', async (data) => {
+    console.log('🧊 ICE candidate geldi:', data.fromName, 'ID:', data.from);
+    
+    try {
+        const peerConnection = this.peerConnections.get(data.from);
+        if (peerConnection && peerConnection.remoteDescription) {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+            console.log(`✅ ${data.fromName} ICE candidate eklendi`);
+        } else if (peerConnection) {
+            // Remote description henüz yoksa beklet
+            console.log(`⏳ ${data.fromName} ICE candidate bekletiliyor...`);
+            if (!peerConnection.pendingCandidates) {
+                peerConnection.pendingCandidates = [];
+            }
+            peerConnection.pendingCandidates.push(data.candidate);
+        } else {
+            console.warn(`⚠️ ${data.fromName} için peer connection bulunamadı`);
+        }
+    } catch (error) {
+        console.error(`❌ ${data.fromName} ICE candidate hatası:`, error);
+    }
+});
 
                 this.socket.on('peer-disconnected', (data) => {
                     console.log('🔌 Peer ayrıldı:', data.userId);
@@ -1671,13 +1748,35 @@ async createPeerForUser(user) {
     };
     
     // Connection state'i takip et
-    peerConnection.onconnectionstatechange = () => {
-        console.log(`🔗 ${user.name} bağlantı durumu: ${peerConnection.connectionState}`);
-        if (peerConnection.connectionState === 'connected') {
-            this.isConnected = true;
-            document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
-        }
-    };
+// Connection state'i takip et
+peerConnection.onconnectionstatechange = () => {
+    console.log(`🔗 ${user.name} bağlantı durumu: ${peerConnection.connectionState}`);
+    if (peerConnection.connectionState === 'connected') {
+        this.isConnected = true;
+        document.getElementById('videoConnectionIndicator').className = 'connection-indicator connected';
+        this.showStatus(`✅ ${user.name} ile bağlantı kuruldu!`, 'success');
+    } else if (peerConnection.connectionState === 'failed') {
+        console.error(`❌ ${user.name} bağlantı başarısız!`);
+        this.showStatus(`❌ ${user.name} ile bağlantı kurulamadı!`, 'error');
+    } else if (peerConnection.connectionState === 'disconnected') {
+        console.warn(`⚠️ ${user.name} bağlantısı koptu`);
+    }
+};
+
+// ICE connection state'i de takip et
+peerConnection.oniceconnectionstatechange = () => {
+    console.log(`🧊 ${user.name} ICE durumu: ${peerConnection.iceConnectionState}`);
+    if (peerConnection.iceConnectionState === 'failed') {
+        console.error(`❌ ${user.name} ICE bağlantısı başarısız!`);
+        // ICE restart dene
+        peerConnection.restartIce();
+    }
+};
+
+// ICE gathering state'i takip et
+peerConnection.onicegatheringstatechange = () => {
+    console.log(`🔍 ${user.name} ICE gathering: ${peerConnection.iceGatheringState}`);
+};
     
     // Offer oluştur ve gönder - her zaman gönder
     try {
