@@ -171,6 +171,66 @@ socket.on('stream-ready', (data) => {
        });
    });
 
+
+   // YENİ EVENT'LERİ BURAYA EKLE 👇
+socket.on('get-existing-users', (data) => {
+    const { room } = data;
+    
+    if (!rooms.has(room)) return;
+    
+    const roomUserIds = Array.from(rooms.get(room));
+    const existingUsers = roomUserIds
+        .map(id => users.get(id))
+        .filter(user => user && user.id !== socket.id);
+    
+    console.log(`📋 ${socket.id} için mevcut kullanıcılar gönderiliyor:`, existingUsers.length);
+    
+    socket.emit('existing-users', {
+        users: existingUsers
+    });
+});
+
+socket.on('request-user-list', (data) => {
+    const { room, newUserId } = data;
+    
+    if (!rooms.has(room)) return;
+    
+    const roomUserIds = Array.from(rooms.get(room));
+    const allUsers = roomUserIds
+        .map(id => users.get(id))
+        .filter(Boolean);
+    
+    console.log(`🔄 User list request: room=${room}, newUser=${newUserId}`);
+    
+    // Yeni gelene mevcut kullanıcıları gönder
+    const newUser = users.get(newUserId);
+    if (newUser) {
+        const existingUsers = allUsers.filter(u => u.id !== newUserId);
+        
+        if (existingUsers.length > 0) {
+            io.to(newUserId).emit('existing-users', {
+                users: existingUsers
+            });
+            console.log(`📤 ${newUser.name} için ${existingUsers.length} mevcut kullanıcı gönderildi`);
+        }
+        
+        // Mevcut kullanıcılara yeni geleni bildir
+        existingUsers.forEach(user => {
+            io.to(user.id).emit('setup-peer-connections', {
+                allUsers: [newUser],
+                myInfo: user
+            });
+        });
+        
+        console.log(`📢 ${existingUsers.length} mevcut kullanıcıya yeni gelen bildirildi`);
+    }
+});
+
+// Ayrılma işlemleri (buradan sonra devam eder)
+socket.on('leave-room', () => {
+    handleUserLeave(socket);
+});
+
    // Ayrılma işlemleri
    socket.on('leave-room', () => {
        handleUserLeave(socket);
